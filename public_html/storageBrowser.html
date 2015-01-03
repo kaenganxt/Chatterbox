@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <title>Storage Browser</title>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <script type='text/javascript' src='libs/jq.js'></script>
+        <script type='text/javascript' src='libs/localForage.js'></script>
+        <script type='text/javascript'>
+            localforage.config({
+                name: "Chatterbox",
+                storeName: "chatterbox",
+                description: "The chatterbox local data."
+            });
+            $(document).ready(function() {
+                $("#getContent").val("");
+                $("#getJSONParseVal").val("");
+                $("#storeType").val(localforage.driver());
+                $("#getContentBtn").click(function() {
+                    localforage.getItem($("#getContent").val()).then(function(data) {
+                        if(!data) $('#getContentValue').val("-Not found-");
+                        else
+                        {
+                            $("#getContentValue").val(data);
+                        }
+                    });
+                });
+                $("#getJSONParse").click(function() {
+                    if($("#getContentValue").val() === "" || $("#getContentValue").val() === "-Not found-") alert("Request a value first!");
+                    else
+                    {
+                        $("#getJSONParseVal").show().val("");
+                        $.each(JSON.parse($("#getContentValue").val()), function(key,val) 
+                        {
+                            $("#getJSONParseVal").val($("#getJSONParseVal").val() + "\n"+key+": "+val);
+                        });
+                    }
+                });
+                $("#setContent").click(function() {
+                    localforage.setItem($("#setContentKey").val(),$("#setContentValue").val());
+                    $("#setContentKey").val("");
+                    $("#setContentValue").val("");
+                });
+            });
+        </script>
+    </head>
+    <body>
+        <h1>Storage browser</h1>
+        <label for='storeType'>Used storage driver: </label><output id='storeType'></output><br />
+        <h3>Get content: </h3>
+        <input type='text' id='getContent' placeholder='Key' /> <input type='button' id='getContentBtn' value='Get' />&nbsp;&nbsp;<output id='getContentValue'></output><br />
+        <br /><input type='button' id='getJSONParse' value='JSON-Parse the value'/><br /><textarea id='getJSONParseVal' style='display:none;' rows='8' cols='20' readonly="readonly"></textarea><br /><br />
+        <h3>Set/update content: </h3>
+        <input type='text' id='setContentKey' placeholder='Key' />&nbsp;<input type='text' id='setContentValue' placeholder='Value' />&nbsp;<input type='button' id='setContent' value='Set' /><br /><br />
+    </body>
+</html>

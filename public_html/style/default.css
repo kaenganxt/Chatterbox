@@ -1,0 +1,272 @@
+input[type=text], textarea, select, input[type=search], input[type=email], input[type=password], input[type=number]
+{
+    padding: 5px 9px;
+    display:inline-block;
+    font-family: Arial, Tahoma, sans-serif;
+    border: 1px dotted #ccc;
+    line-height: 1.4em;
+    min-width:14em;
+}
+input[type=text]:focus, textarea:focus, select:focus, input[type=search]:focus, input[type=email]:focus, input[type=password]:focus, input[type=number]:focus
+{
+    border-style: solid;
+    border-color: #bababa;
+}
+input[type=button], input[type=submit]
+{
+    color: #dee5f0;
+    cursor: pointer;
+    padding: 5px 11px;
+    border: solid 1px #224983;
+    background: #1e4c99;
+}
+input[type=button]:hover, input[type=submit]:hover
+{
+    background: #183d80;
+}
+input[type=button]:active, input[type=submit]:active
+{
+    color: #8c9dc0;
+}
+#login
+{
+    position:fixed;
+    top:30%;
+    left:38%;
+    width:480px;
+    min-width: 480px;
+    z-index:30;
+    background-color:#3776ae;
+    border-radius:7px;
+    padding:10px;
+}
+@media all and (max-width: 1110px)
+{
+    #login
+    {
+        left:25%;
+    }
+    div#connectingWindow
+    {
+        left:27%;
+    }
+}    
+@media all and (max-width: 780px)
+{
+    #login
+    {
+        left:15%;
+    }
+    div#connectingWindow
+    {
+        left:16%;
+    }
+} 
+@media all and (max-width: 550px)
+{
+    #login
+    {
+        left:0;
+        top:0;
+    }
+    div#connectingWindow
+    {
+        left:1em;
+        top:1em;
+    }
+}
+@media all and (max-height: 450px)
+{
+    #login
+    {
+        left:0;
+        top:0;
+    }
+    div#connectingWindow
+    {
+        left:1em;
+        top:1em;
+    }
+}
+body
+{
+    background-color:#2f2f2f;
+}
+#login fieldset
+{
+    border:0;
+    float:left;
+}
+#login form
+{
+    z-index:10;
+}
+#loginForm
+{
+    position:relative;
+    z-index:20;
+   // left:-40px;
+    
+}
+#loginForm fieldset
+{
+    -moz-box-shadow:    -60px 14px 25px 6px #3776ae;
+    -webkit-box-shadow: -60px 14px 25px 6px #3776ae;
+    box-shadow:         -60px 14px 25px 6px #3776ae;
+    background-color:#3776ae;
+    height:232px;
+    margin-top:10px;
+}
+#registerForm fieldset
+{
+    background-color:#3776ae;
+}
+#loginForm fieldset h3
+{
+    margin-top:20px;
+}
+#registerForm fieldset:last-of-type
+{
+    display:none;
+    margin-top:25px;
+}
+input#backToLogin
+{
+    background: #13ab0b;
+    border-color: #13830b;
+}
+input#backToLogin:hover
+{
+    background: #138c0b;
+}
+#loginSubmit
+{
+    float:right;
+    margin-right: 1.5em;
+}
+#connectingWindow
+{
+    position:fixed;
+    top:35%;
+    left:40%;
+    width:420px;
+    height:auto;
+    z-index:60;
+    background-color:rgb(200,200,200);
+    border-radius:7px;
+    -moz-box-shadow:    0px 0px 15px 6px black;
+    -webkit-box-shadow: 0px 0px 15px 6px black;
+    box-shadow:         0px 0px 15px 6px black;
+    padding-top:1.5em;
+    padding-bottom: 1.5em;
+    padding-left:0.4em;
+}
+#connectingWindow>img
+{
+    float:left;
+    margin-right:1.5em;
+}
+#connectingWall
+{
+    position:fixed;
+    top:0;
+    left:0;
+    margin:0;
+    width:100%;
+    height:100%;
+    background-color:rgba(0,0,0,0.25);
+    z-index:50;
+}
+#connectingPopup
+{
+    display:none;
+}
+#loadingModal
+{
+    left:35%;
+    position:fixed;
+    width:30%;
+    top:35%;
+}
+#loadingModal h3 
+{
+    margin: 0;
+    padding: 0.4em;
+    text-align: center;
+    font-size: 2.4em;
+    font-weight: 300;
+    opacity: 0.8;
+    background: rgba(0,0,0,0.1);
+    border-radius: 3px 3px 0 0;
+}
+
+#loadingModal>div>div 
+{
+    padding: 15px 40px 30px;
+    margin: 0;
+    font-weight: 300;
+    font-size: 1.15em;
+}
+#loadingOverlay
+{
+    position:fixed;
+    top:0;
+    left:0;
+    margin:0;
+    width:100%;
+    height:100%;
+    background-color:rgba(0,0,0,0.25);
+    z-index:20;
+}
+#loadingModal>div
+{
+    background-color:rgb(231, 76, 60);
+    border-radius:20px;
+    color:white;
+}
+#loadingModal>div>h3
+{
+    padding:0.4em;
+    text-align:center;
+    font-size:2.4em;
+    font-weight: 300;
+    opacity:0.8;
+    background-color:rgba(0,0,0,0.1);
+    border-radius: 3px 3px 0px 0px;
+}
+#loadingModal>div>div
+{
+    padding-top:15px;
+    padding-right: 40px;
+    padding-bottom:30px;
+    padding-left:40px;
+    font-weight:300;
+    font-size:1.15em;
+}
+.screen
+{
+    position:fixed;
+    top:4em;
+    left:4em;
+    width:100%;
+    height:100%;
+    z-index:20;
+    background-color:#1e4c99;
+    border-radius:7px;
+    padding:5em;
+    padding-top:1.5em;
+}
+.screenInfoBox
+{
+    width:30em;
+    height:15em;
+    background-color:#1e4c98;
+    padding:1.5em;
+}
+.screenButtonSet
+{
+    right:-1em;
+    margin-top:0.5em;
+    bottom:0.5em;
+    position:relative;
+}

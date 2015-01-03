@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <title>Chatterbox Startup...</title>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width">
+        <script type="text/javascript" src="libs/jq.js"></script>
+        <script type="text/javascript" src="config.js"></script>
+        <script type="text/javascript">
+            //Startup loading
+            $(document).ready(function() {  
+                $("<link/>",{rel: "stylesheet",type: "text/css",href: "style/default.css"}).appendTo("head");
+                $.getScript("scripts/dialog.js", loadScripts);
+            });
+            //Scripts
+            var nextScript = null;
+            function loadScripts()
+            {
+                if(nextScript === null)
+                {
+                  $.ajax({
+                    url: "postload/modalDialog.html",
+                    success: function(answer) {
+                        $("body").append(answer);
+                        $("#loadingModal").addClass("md-show");
+                        $("#loadingBeginning").remove();
+                        nextScript = "forage";
+                        $.getScript("libs/jq.ui.js",loadScripts);
+                    }
+                  });
+                }
+                else if(nextScript === "forage")
+                {
+                    nextScript = "crypto";
+                    $("#loadingModal>div>div").html("Loading localForage...");
+                    $.getScript("libs/localForage.js",loadScripts);
+                }
+                else if(nextScript === "crypto")
+                {
+                    nextScript = "storage";
+                    $("#loadingModal>div>div").html("Loading Crypto-JS...");
+                    $.getScript("libs/cryptoJs.js",loadScripts);
+                }
+                else if(nextScript === "storage")
+                {
+                    $("#loadingModal>div>div").html("Loading storage setup...");
+                    $.getScript("scripts/storageSetup.js");
+                }
+                
+                else if(nextScript === "login")
+                {
+                    $("#loadingModal>div>h3").html("Loading login...");
+                    $("#loadingModal>div>div").html("Loading web socket scripts...");
+                    $.getScript("scripts/websocket.js", function() {
+                        $("#loadingModal>div>div").html("Loading login scripts...");
+                        $.getScript("scripts/login.js",function() {
+                            $("#loadingModal>div>div").html("Loading form...");
+                            $.ajax({
+                                url: "postload/login.html",
+                                success: function(answer)
+                                {
+                                    $("body").append(answer);
+                                    loginFormHandlers();
+                                }
+                            });
+                        });
+                    });
+                }
+                else if(nextScript === "connectStorage")
+                {
+                    $("#connectingWindow>div").html("Found your data!<br />Will now connect...");
+                    $.getScript("scripts/storagers.js",function() {
+                        getWorkingStorager(storagers, newStorager, storagerTask, storagers);
+                    });
+                }
+                else if(nextScript === "main")
+                {
+                    $.getScript("scripts/main.js");
+                }
+            }
+        </script>
+    </head>
+    <body>
+    <main>
+        <div id="loadingBeginning" style="margin-top:10%;text-align:center;font-size:300%">
+            Loading...
+        </div>
+    </main>
+    <noscript>
+    <div style="text-align:center;">
+        <div style="background-color:#ab4639;position:fixed;top:5em;width:30%;height:6em;font-size:200%;z-index:10;padding:1em;border-radius:10px;left:35%;">
+            You have to enable JavaScript to use this site.
+        </div>
+        <div style="background-color:rgba(110,110,110,0.5);position:fixed;width:100%;height:100%;top:0;left:0;margin:0;z-index:5">      
+        </div>
+    </div>
+    </noscript>
+    </body>
+</html>
