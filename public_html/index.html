@@ -10,72 +10,34 @@
             //Startup loading
             $(document).ready(function () {
                 $("<link/>", {rel: "stylesheet", type: "text/css", href: "style/default.css"}).appendTo("head");
-                $.getScript("scripts/dialog.js", loadScripts);
-            });
-            //Scripts
-            var nextScript = null;
-            function loadScripts()
-            {
-                if (nextScript === null)
-                {
-                    $.ajax({
-                        url: "postload/modalDialog.html",
-                        success: function (answer) {
-                            $("body").append(answer);
-                            $("#loadingModal").addClass("md-show");
-                            $("#loadingBeginning").remove();
-                            nextScript = "forage";
-                            $.getScript("libs/jq.ui.js", loadScripts);
-                        }
-                    });
-                }
-                else if (nextScript === "forage")
-                {
-                    nextScript = "crypto";
-                    $("#loadingModal>div>div").html("Loading localForage...");
-                    $.getScript("libs/localForage.js", loadScripts);
-                }
-                else if (nextScript === "crypto")
-                {
-                    nextScript = "storage";
-                    $("#loadingModal>div>div").html("Loading Crypto-JS...");
-                    $.getScript("libs/cryptoJs.js", loadScripts);
-                }
-                else if (nextScript === "storage")
-                {
-                    $("#loadingModal>div>div").html("Loading storage setup...");
-                    $.getScript("scripts/storageSetup.js");
-                }
-
-                else if (nextScript === "login")
-                {
-                    $("#loadingModal>div>h3").html("Loading login...");
-                    $("#loadingModal>div>div").html("Loading web socket scripts...");
-                    $.getScript("scripts/websocket.js", function () {
-                        $("#loadingModal>div>div").html("Loading login scripts...");
-                        $.getScript("scripts/login.js", function () {
-                            $("#loadingModal>div>div").html("Loading form...");
-                            $.ajax({
-                                url: "postload/login.html",
-                                success: function (answer)
-                                {
-                                    $("body").append(answer);
-                                    loginFormHandlers();
-                                }
+                loadScript("scripts/dialog.js", function() { 
+                    loadScript("postload/modalDialog.html", function(html) {
+                        $("body").append(html);
+                        $("#loadingModal").addClass("md-show");
+                        $("#loadingBeginning").remove();
+                        loadScript("libs/jq.ui.js", function() {
+                            $("#loadingModal>div>div").html("Loading localForage...");
+                            loadScript("libs/localForage.js", function() {
+                                $("#loadingModal>div>div").html("Loading Crypto-JS...");
+                                loadScript("libs/cryptoJs.js", function() {
+                                    $("#loadingModal>div>div").html("Loading storage setup...");
+                                    loadScript("scripts/storageSetup.js");
+                                });
                             });
                         });
+                    }, false); 
+                });
+            });
+            function loadScript(script, callback, isScript) {
+                if (isScript === null) isScript = true;
+                if (callback === null) callback = function() {};
+                if (!isScript) {
+                    $.ajax({
+                        url: script,
+                        success: callback
                     });
-                }
-                else if (nextScript === "connectStorage")
-                {
-                    $("#connectingWindow>div").html("Found your data!<br />Will now connect...");
-                    $.getScript("scripts/storagers.js", function () {
-                        getWorkingStorager(storagers, newStorager, storagerTask, storagers);
-                    });
-                }
-                else if (nextScript === "main")
-                {
-                    $.getScript("scripts/main.js");
+                } else {
+                    $.getScript(script, callback);
                 }
             }
         </script>

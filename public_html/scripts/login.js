@@ -11,7 +11,7 @@ var config = {
 var storagerTask = "none";
 var registerIdsCache;
 var cachedPw;
-function loginFormHandlers()
+function loginFormHandlers(showWhat)
 {
     $("#loadingModal").hide();
     $(".md-overlay").hide();
@@ -23,6 +23,10 @@ function loginFormHandlers()
         $("#registerForm fieldset:last-of-type").hide();
         $("#loginForm").fadeIn();
     });
+    if (showWhat === "register") {
+        $("#loginForm").hide();
+        $("#registerForm fieldset:last-of-type").show();
+    }
     $("#registerForm").bind("submit", function (e) {
         e.preventDefault();
         var data = new Object();
@@ -138,7 +142,7 @@ function loginHandler(data)
             storagerDcs[personalDataStore].close();
             storagerPcs[personalDataStore].close();
             personalDataStore = undefined;
-            getWorkingStorager(storagerCache["personal"], newStorager, "login", storagerCache["personal"]);
+            getWorkingStorager(storagerCache["personal"], function(id) { newStorager(id, "login", storagerCache['personal']); }, "login");
         }
         else if (dataO.status === "pwWrong")
         {
@@ -180,6 +184,7 @@ function loginHasStore()
     storagerDcs[personalDataStore].send(JSON.stringify(login));
     pcEvents[personalDataStore]["loginHandler"] = loginHandler;
 }
+var registeredToRelay = false;
 function registerToRelay(id)
 {
     var obj = new Object();
@@ -202,9 +207,8 @@ function updateRegisterRelay(id)
 }
 function registerToStorager(id)
 {
-    console.log("registerNewStorager " + id);
     var data = waitingData;
-    console.log("storager dcs:");
+    console.log("hiho");
     storagerDcs[id].send(JSON.stringify(data));
     if (!registeredToRelay)
     {
@@ -236,8 +240,6 @@ function registerToStorager(id)
             relayReconnect();
         }
     }
-    //TODO: The relay code
-    //TODO: The storager code
     nextRegisterClient();
 }
 function nextRegisterClient()
@@ -251,23 +253,19 @@ function nextRegisterClient()
     console.log("Registering to:" + id);
     if (typeof storagerIds !== "undefined" && storagerIds !== null && $.inArray(id, storagerIds) !== -1)
     {
-        console.log("one");
         registerToStorager(id);
     }
     if (typeof storagerPcs === "undefined" || storagerPcs === null)
     {
-        console.log("two");
-        nextScript = "connectStorage";
-        waitingStatus = "connectStorageForRegister";
-        loadScripts();
-        storagers = new Array(-1, id);
-        storagerTask = "register";
+        var ida = new Array(-1, id);
+        loadScript("scripts/storagers.js", function() {
+            getWorkingStorager(ida, function(idd) { newStorager(idd, "register", ida); }, "register");
+        });
     }
     else
     {
-        console.log("three");
-        storagers = new Array(-1, id);
-        getWorkingStorager(storagers, newStorager, "register", storagers);
+        var ida = new Array(-1, id);
+        getWorkingStorager(ida, function(idd) { newStorager(idd, "register", ida); }, "register");
     }
 }
 
@@ -411,43 +409,6 @@ function iceFail() {
 function finished() {
     console.log("Connection creation finished!");
 }
-function getStatsUniversal(peer, callback) {
-    if (!!navigator.mozGetUserMedia) {
-        peer.getStats(
-                function (res) {
-                    var items = [];
-                    res.forEach(function (result) {
-                        items.push(result);
-                    });
-                    callback(items);
-                },
-                callback
-                );
-    } else {
-        peer.getStats(function (res) {
-            var items = [];
-            res.result().forEach(function (result) {
-                var item = {};
-                result.names().forEach(function (name) {
-                    item[name] = result.stat(name);
-                });
-                item.id = result.id;
-                item.type = result.type;
-                item.timestamp = result.timestamp;
-                items.push(item);
-            });
-            callback(items);
-        });
-    }
-}
-function getStats(peer) {
-    getStatsUniversal(peer, function (results) {
-        for (var i = 0; i < results.length; ++i) {
-            var res = results[i];
-            console.log(res);
-        }
-    });
-}
 function doWebRTCConnect()
 {
     pc = new PeerConnection(config);
@@ -481,9 +442,6 @@ function doWebRTCConnect()
         }
         else if (evt.data === "opened")
         {
-            setInterval(function () {
-                getStats(peer);
-            }, 1000);
             dc.send("hello");
             ws.send("clearStatus");
             console.log("Connection is ready to be used! We will now gather some data from the relay!");
@@ -522,13 +480,15 @@ function doWebRTCConnect()
                         {
                             if (typeof storagerPcs === "undefined")
                             {
-                                nextScript = "connectStorage";
                                 waitingStatus = "connectStorageForLogin";
-                                loadScripts();
+                                $("#connectingWindow>div").html("Found your data!<br />Will now connect...");
+                                loadScript("scripts/storager.js", function() {
+                                    getWorkingStorager(storagers, function(id) { newStorager(id, "login", storagers); }, "login");
+                                });
                             }
                             else
                             {
-                                getWorkingStorager(storagers, newStorager, storagerTask, storagers);
+                                getWorkingStorager(storagers, function(id) { newStorager(id, "login", storagers); }, "login");
                             }
                         }
                         else
@@ -617,7 +577,6 @@ function cbStartup(data, pw)
     $("#connectingWindow>*").html("");
     $("#connectingWindow").append("<h2>Startup...</h2><div>Login successfull! Now starting chatterbox...</div>");
     decodedData = data; //Entschlüsseln
-    nextScript = "main";
-    loadScripts();
+    loadScript("scripts/main.js");
 }
 var decodedData;

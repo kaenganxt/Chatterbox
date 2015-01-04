@@ -4,7 +4,6 @@ localforage.config({
     storeName: "chatterbox",
     description: "The chatterbox local data."
 });
-var whatToShow;
 localforage.getItem("lastseen").then(function (lastseen) {
     if (!lastseen)
     {
@@ -21,6 +20,10 @@ localforage.getItem("lastseen").then(function (lastseen) {
         }
         else if (laststatus === "no")
         {
+            login("new");
+        }
+        else
+        {
             login();
         }
     });
@@ -34,10 +37,21 @@ function newUser()
 }
 function login(isNew)
 {
+    var whatToShow;
     if (isNew === null)
         whatToShow = "login";
     else
         whatToShow = "register";
-    nextScript = "login";
-    loadScripts();
+    $("#loadingModal>div>h3").html("Loading login...");
+    $("#loadingModal>div>div").html("Loading web socket scripts...");
+    loadScript("scripts/websocket.js", function() {
+        $("#loadingModal>div>div").html("Loading login scripts...");
+        loadScript("scripts/login.js", function() {
+            $("#loadingModal>div>div").html("Loading form...");
+            loadScript("postload/login.html", function(html) {
+                $("body").append(html);
+                loginFormHandlers(whatToShow);
+            }, false);
+        });
+    });
 }

@@ -194,20 +194,14 @@ function iceFail() {
 }
 function answerStep()
 {
-    pcs[waitingForClient].createAnswer(answerStep2, answerFail);
-}
-var currAnswer;
-function answerStep2(answer)
-{
-    currAnswer = answer;
-    pcs[waitingForClient].setLocalDescription(answer, sendAnswer, answerFail);
-}
-function sendAnswer()
-{
-    var answer = new Object();
-    answer.action = "answerDesc";
-    answer.answer = currAnswer;
-    send(answer);
+    pcs[waitingForClient].createAnswer(function(answer) {
+        pcs[waitingForClient].setLocalDescription(answer, function() {
+            var answerobj = new Object();
+            answerobj.action = "answerDesc";
+            answerobj.answer = answer;
+            send(answerobj);
+        }, answerFail); 
+    }, answerFail);
 }
 function answerFail(code)
 {

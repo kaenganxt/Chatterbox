@@ -4,23 +4,17 @@ var storagerPcs = new Array();
 var storagerDcs = new Array();
 var personalDataStore;
 var currentConnectingId;
-var currentConnectingType;
-var currentConnectingData;
+var connectingType;
 var pcEvents = new Array();
 var storagerCache = new Object();
-
-var offerCache;
 
 var newStoragerCache = new Object();
 
 function newStoragerMsgHandler(rawData)
 {
     var id = newStoragerCache.id;
-    task = newStoragerCache.task;
-    storagers = newStoragerCache.storagers;
-    console.log("newStorager...");
-    console.log(waitingStatus);
-    console.log(rawData);
+    var task = newStoragerCache.task;
+    var storagers = newStoragerCache.storagers;
     if (waitingStatus === "connStorager")
     {
         $("#loadingNewStoragerInfo").remove();
@@ -33,7 +27,7 @@ function newStoragerMsgHandler(rawData)
                 return;
             }
             $("#connectingWindow>div").append("<span id='loadingNewStoragerInfo'>Whoops! This should not happen.<br /> Okay, searching new storage handler...</span>");
-            getWorkingStorager(storagers, newStorager, task, storagers);
+            getWorkingStorager(storagers, function(id) { newStorager(id, task, storagers); }, task);
         }
         else if (data.status === "busy")
         {
@@ -47,31 +41,22 @@ function newStoragerMsgHandler(rawData)
             waitingStatus = "pendingStoragerConnect";
             currentConnectingId = id;
             console.log("data-status: ok");
-            if (task === "login")
-            {
-                currentConnectingType = "personalData";
-                currentConnectingData = "login";
-            }
-            else if (task === "register")
-            {
-                currentConnectingType = "personalData";
-                currentConnectingData = "register";
-            }
-            else
-            {
-                currentConnectingType = "unknown";
-                currentConnectingData = "unknown";
-            }
-            pCC = new PeerConnection(config);
+            connectingType = task;
+            var pCC = new PeerConnection(config);
             pCC.onclosedconnection = function () {
                 console.log("onclosed");
                 storagerPcs[id] = null;
                 storagerDcs[id] = null;
             };
+            pCC.onicecandidate = function(e) {
+                var object = new Object();
+                object.action = "candidate";
+                object.candidate = e.candidate;
+                send(object);
+            };
             storagerPcs[id] = pCC;
-            dCC = pCC.createDataChannel("client");
+            var dCC = pCC.createDataChannel("client");
             dCC.onclose = function () {
-                console.log("onclose");
                 console.log("Data channel closed.");
                 storagerPcs[id].close();
                 storagerPcs[id] = null;
@@ -79,14 +64,11 @@ function newStoragerMsgHandler(rawData)
             };
             pcEvents[id] = new Object();
             dCC.onmessage = function (e) {
-                console.log("onmessage");
                 $.each(pcEvents[id], function () {
                     this(e.data);
                 });
             };
-            console.log("döa");
             storagerDcs[id] = dCC;
-            console.log("äad");
             pCC.createOffer(stOfferComplete, stPcFail);
         }
     }
@@ -97,6 +79,9 @@ function newStoragerMsgHandler(rawData)
         {
             storagerPcs[currentConnectingId].setRemoteDescription(new SessionDescription(data.answer), registerHasSt, stPcFail);
         }
+        else if (data.action === "candidate") {
+            storagerPcs[currentConnectingId].addIceCandidate(new IceCandidate(data.candidate), iceSuccess, iceFail);
+        }
     }
 }
 function registerHasSt()
@@ -105,23 +90,20 @@ function registerHasSt()
         if (raw === "opened")
         {
             storagerIds[currentConnectingId] = currentConnectingId;
-            console.log(currentConnectingId);
             storagerDcs[currentConnectingId].send("hello");
             ws.send("clearStatus");
             console.log("We connected to a storage handler.");
             waitingStatus = "no";
-            currentConnectingId = null;
-            if (currentConnectingData === "login")
+            if (connectingType === "login")
             {
                 loginHasStore();
             }
-            else if (currentConnectingData === "register")
+            else if (connectingType === "register")
             {
                 registerToStorager(currentConnectingId);
             }
-            currentConnectingType = null;
-            currentConnectingData = null;
-            offerCache = null;
+            currentConnectingId = null;
+            connectingType = null;
             newStoragerCache = new Object();
         }
     };
@@ -132,7 +114,7 @@ function newStorager(id, task, storagers)
     if (ws === null)
     {
         initWS(function () {
-            newStorager(id, task);
+            newStorager(id, task, storagers);
         });
         return;
     }
@@ -149,15 +131,14 @@ function newStorager(id, task, storagers)
 
 function stOfferComplete(localOffer)
 {
-    offerCache = localOffer;
-    storagerPcs[currentConnectingId].setLocalDescription(localOffer, stSendOffer, stPcFail);
+    storagerPcs[currentConnectingId].setLocalDescription(localOffer, function() { stSendOffer(localOffer); }, stPcFail);
 }
-function stSendOffer()
+function stSendOffer(offer)
 {
-    var offer = new Object();
-    offer.action = "startConn";
-    offer.offer = offerCache;
-    send(offer);
+    var offerobj = new Object();
+    offerobj.action = "startConn";
+    offerobj.offer = offer;
+    send(offerobj);
 }
 function stPcFail(code)
 {
@@ -167,20 +148,18 @@ function stPcFail(code)
     $("#connectingWindow").append("<h3 style='color:red'>Failed to connect to storage handler</h3><div>Please try again or contact us for support.</div>");
 }
 
-
 var regularTry = false;
 
-function getWorkingStorager(ids, callback, cbparam1, cbparam2)
+function getWorkingStorager(ids, callback, action)
 {
     if (storageBlacklist.length === 0)
     {
         setTimeout(function () {
-            getWorkingStorager(ids, callback, cbparam1, cbparam2);
+            getWorkingStorager(ids, callback, action);
         }, 10);
         return;
     }
-    storagerTask = cbparam1;
-    if (storagerTask === "login" || storagerTask === "register")
+    if (action === "login" || action === "register")
     {
         storagerCache["personal"] = ids;
     }
@@ -198,7 +177,7 @@ function getWorkingStorager(ids, callback, cbparam1, cbparam2)
     });
     waitingStatus = "checkStorager";
 
-    busyAvailable = false;
+    var busyAvailable = false;
     wsHandlers["checkStorager"] = function (e) {
         if (waitingStatus === "checkStorager")
         {
@@ -210,22 +189,11 @@ function getWorkingStorager(ids, callback, cbparam1, cbparam2)
                     $("#loadingStoragerInfo").remove();
                     regularTry = false;
                     waitingStatus = "no";
-                    if (storagerTask === "login" || storagerTask === "register")
+                    if (action === "login" || action === "register")
                     {
                         personalDataStore = data.id;
                     }
-                    if (cbparam1 === null)
-                    {
-                        callback(data.id);
-                    }
-                    else if (cbparam2 === null)
-                    {
-                        callback(data.id, cbparam1);
-                    }
-                    else
-                    {
-                        callback(data.id, cbparam1, cbparam2);
-                    }
+                    callback(data.id);
                     return;
                 }
                 else if (data.status === "busy")
@@ -235,7 +203,7 @@ function getWorkingStorager(ids, callback, cbparam1, cbparam2)
                 checkedCount++;
                 if (checkedCount === ids.length)
                 {
-                    if (storagerTask === "register")
+                    if (action === "register")
                     {
                         nextRegisterClient();
                         return;
@@ -245,14 +213,14 @@ function getWorkingStorager(ids, callback, cbparam1, cbparam2)
                         $("#loadingStoragerInfo").remove();
                         $("#connectingWindow>div").append("<span id='loadingStoragerInfo'><br />All the handlers with/for your data are busy at the moment. <br />Please wait...</span>");
                         setTimeout(function () {
-                            getWorkingStorager(ids, callback, cbparam1, cbparam2);
+                            getWorkingStorager(ids, callback, action);
                         }, 500);
                         return;
                     }
                     if (regularTry)
                     {
                         setTimeout(function () {
-                            getWorkingStorager(ids, callback, cbparam1, cbparam2);
+                            getWorkingStorager(ids, callback, action);
                         }, 1500);
                         return;
                     }
@@ -262,13 +230,13 @@ function getWorkingStorager(ids, callback, cbparam1, cbparam2)
                         $("#connectingWindow>div").html("");
                         $("#connectingWindow>div").append("<span id='loadingStoragerInfo'>No handlers with your data are available at the moment. <br />Please wait...</span>");
                         setTimeout(function () {
-                            getWorkingStorager(ids, callback, cbparam1, cbparam2);
+                            getWorkingStorager(ids, callback, action);
                         }, 1500);
                         regularTry = true;
                         return;
                     }
                     $("#connectingWindow>*").hide();
-                    $("#connectingWindow").append("<span id='loadingStoragerInfo'><h3 style='color:red;'>Error: Storage client not available!</h3><div>Try again later. Maybe get a coffee?</div></span>");
+                    $("#connectingWindow").append("<span id='loadingStoragerInfo'><h3 style='color:red;'>Error: Storage client not available!</h3><div>Try again later. Maybe get a coffee?</div></span>"+closePopupWindow());
                 }
             }
         }
@@ -282,7 +250,7 @@ function storageBlacklistAdd(id)
 }
 function storageBlacklistIs(id)
 {
-    return false; //Debugging...
+    return false; //TODO: Remove debugging stuff
     return ($.inArray(id, storageBlacklist) !== -1);
 }
 var storageBlacklist = new Array();
