@@ -12,32 +12,34 @@
                 storeName: "chatterbox",
                 description: "The chatterbox local data."
             });
-            $(document).ready(function() {
+            $(document).ready(function () {
                 $("#getContent").val("");
                 $("#getJSONParseVal").val("");
                 $("#storeType").val(localforage.driver());
-                $("#getContentBtn").click(function() {
-                    localforage.getItem($("#getContent").val()).then(function(data) {
-                        if(!data) $('#getContentValue').val("-Not found-");
+                $("#getContentBtn").click(function () {
+                    localforage.getItem($("#getContent").val()).then(function (data) {
+                        if (!data)
+                            $('#getContentValue').val("-Not found-");
                         else
                         {
                             $("#getContentValue").val(data);
                         }
                     });
                 });
-                $("#getJSONParse").click(function() {
-                    if($("#getContentValue").val() === "" || $("#getContentValue").val() === "-Not found-") alert("Request a value first!");
+                $("#getJSONParse").click(function () {
+                    if ($("#getContentValue").val() === "" || $("#getContentValue").val() === "-Not found-")
+                        alert("Request a value first!");
                     else
                     {
                         $("#getJSONParseVal").show().val("");
-                        $.each(JSON.parse($("#getContentValue").val()), function(key,val) 
+                        $.each(JSON.parse($("#getContentValue").val()), function (key, val)
                         {
-                            $("#getJSONParseVal").val($("#getJSONParseVal").val() + "\n"+key+": "+val);
+                            $("#getJSONParseVal").val($("#getJSONParseVal").val() + "\n" + key + ": " + val);
                         });
                     }
                 });
-                $("#setContent").click(function() {
-                    localforage.setItem($("#setContentKey").val(),$("#setContentValue").val());
+                $("#setContent").click(function () {
+                    localforage.setItem($("#setContentKey").val(), $("#setContentValue").val());
                     $("#setContentKey").val("");
                     $("#setContentValue").val("");
                 });

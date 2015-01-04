@@ -1,6 +1,6 @@
 function mainStart()
 {
-    
+
 }
 function mainSetup()
 {
@@ -13,14 +13,14 @@ function mainSetup()
        <input type='button' value='Continue' class='screenButtonContinue' />&nbsp;&nbsp;&nbsp;\
        <input type='button' value='Skip' id='setupButtonSkip' /></div></div>\
        </div>").appendTo("#mainElement");
-    
-    
+
+
 }
-localforage.getItem("lastStatus").then(function(status)
+localforage.getItem("lastStatus").then(function (status)
 {
     $("<div id='mainElement'><!-- The main chatterbox network elements --></div>").appendTo("body");
     $("#login, #loadingModal, #loadingOverlay").hide();
-    if(status === "no") 
+    if (status === "no")
     {
         mainSetup();
     }

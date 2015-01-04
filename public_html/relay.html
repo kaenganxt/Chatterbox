@@ -15,21 +15,21 @@
         <script type="text/javascript">
             function wsMessage(data)
             {
-                if(data.action === "dataNeeded")
+                if (data.action === "dataNeeded")
                 {
-                    if(data.method === "newStorager")
+                    if (data.method === "newStorager")
                     {
-                        localforage.getItem("storager_count").then(function(count) {
+                        localforage.getItem("storager_count").then(function (count) {
                             var countObj = new Object();
                             countObj.action = "newStorager";
-                            if(!count)
-                            {    
+                            if (!count)
+                            {
                                 countObj.id = 1;
                                 localforage.setItem("storager_count", 1);
                             }
                             else
                             {
-                                count++;                    
+                                count++;
                                 countObj.id = count;
                                 localforage.setItem("storager_count", count);
                             }
@@ -40,11 +40,11 @@
             }
             function pcMessage(data, dc)
             {
-                if(data.action === "userLoc")
+                if (data.action === "userLoc")
                 {
                     var user = data.username;
-                    localforage.getItem("user_"+user+"_stores").then(function(stores) {
-                        if(!stores)
+                    localforage.getItem("user_" + user + "_stores").then(function (stores) {
+                        if (!stores)
                         {
                             var answer = new Object();
                             answer.action = "getUserInfo";
@@ -53,8 +53,8 @@
                         }
                         else
                         {
-                            localforage.getItem("user_"+user+"_hash").then(function(hash) {
-                                if(!hash)
+                            localforage.getItem("user_" + user + "_hash").then(function (hash) {
+                                if (!hash)
                                 {
                                     var answer = new Object();
                                     answer.action = "getUserInfo";
@@ -74,27 +74,27 @@
                         }
                     });
                 }
-                else if(data.action === "register")
+                else if (data.action === "register")
                 {
                     var userHash = data.user;
                     var storagers = data.storagers;
                     var dataHash = data.hash;
-                    localforage.setItem("user_"+userHash+"_stores", storagers);
-                    localforage.setItem("user_"+userHash+"_hash", dataHash);
+                    localforage.setItem("user_" + userHash + "_stores", storagers);
+                    localforage.setItem("user_" + userHash + "_hash", dataHash);
                     //TODO: Distribute the data over the network
                 }
-                else if(data.action === "addStore")
+                else if (data.action === "addStore")
                 {
                     var userHash = data.user;
                     var storager = data.storager;
-                    localforage.getItem("user_"+userHash+"_stores").then(function(data) {
+                    localforage.getItem("user_" + userHash + "_stores").then(function (data) {
                         var stores = new Array();
-                        if(data)
+                        if (data)
                         {
                             stores = JSON.parse(data);
                         }
                         stores.push(storager);
-                        localforage.setItem("user_"+userHash+"_stores", JSON.stringify(stores));
+                        localforage.setItem("user_" + userHash + "_stores", JSON.stringify(stores));
                     });
                 }
             }

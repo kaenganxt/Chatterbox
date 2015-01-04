@@ -1,30 +1,30 @@
-console.log("Using "+localforage.driver());
+console.log("Using " + localforage.driver());
 localforage.config({
     name: "Chatterbox",
     storeName: "chatterbox",
     description: "The chatterbox local data."
 });
 var whatToShow;
-localforage.getItem("lastseen").then(function(lastseen) {
-    if(!lastseen)
+localforage.getItem("lastseen").then(function (lastseen) {
+    if (!lastseen)
     {
         console.log("You are new, i think.");
         newUser();
         return;
     }
-    localforage.getItem("lastStatus").then(function(laststatus) {
-        if(!laststatus) 
+    localforage.getItem("lastStatus").then(function (laststatus) {
+        if (!laststatus)
         {
-            localforage.setItem("lastStatus","no");
+            localforage.setItem("lastStatus", "no");
             login("new");
             laststatus = "no";
         }
-        else if(laststatus === "no")
+        else if (laststatus === "no")
         {
             login();
         }
     });
-    console.log("Last seen: "+lastseen);
+    console.log("Last seen: " + lastseen);
 });
 function newUser()
 {
@@ -34,8 +34,10 @@ function newUser()
 }
 function login(isNew)
 {
-    if(isNew === null) whatToShow = "login";
-    else whatToShow = "register";
+    if (isNew === null)
+        whatToShow = "login";
+    else
+        whatToShow = "register";
     nextScript = "login";
     loadScripts();
 }

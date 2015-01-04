@@ -15,33 +15,35 @@
         <script type="text/javascript">
             function wsMessage(data)
             {
-                if(data.action === "noRelays")
+                if (data.action === "noRelays")
                 {
                     $("body").append("No services available for network-integration...");
-                    setTimeout(function() { window.location.reload(); }, 1000);
+                    setTimeout(function () {
+                        window.location.reload();
+                    }, 1000);
                 }
-                else if(data.action === "your_id")
+                else if (data.action === "your_id")
                 {
                     localforage.setItem("storage_id", data.id);
                 }
             }
-            function pcMessage(data,datachannel)
+            function pcMessage(data, datachannel)
             {
-                if(data.action === "login")
+                if (data.action === "login")
                 {
                     var usr = data.username;
                     var pw = data.pwHash;
-                    localforage.getItem("user_"+usr+"_data").then(function(userdata) {
+                    localforage.getItem("user_" + usr + "_data").then(function (userdata) {
                         var obj = new Object();
                         obj.action = "login";
-                        if(!userdata)
+                        if (!userdata)
                         {
                             obj.status = "notKnown";
                         }
                         else
                         {
                             var userData = JSON.parse(userdata);
-                            if(userData.pwHash!==pw)
+                            if (userData.pwHash !== pw)
                             {
                                 obj.status = "pwWrong";
                             }
@@ -54,7 +56,7 @@
                         datachannel.send(JSON.stringify(obj));
                     });
                 }
-                else if(data.action === "register")
+                else if (data.action === "register")
                 {
                     var user = data.usrName;
                     var pw = data.pw;
@@ -62,7 +64,7 @@
                     var obj = new Object();
                     obj.pwHash = pw;
                     obj.enc = enc;
-                    localforage.setItem("user_"+user+"_data", JSON.stringify(obj));
+                    localforage.setItem("user_" + user + "_data", JSON.stringify(obj));
                 }
             }
         </script>
