@@ -37,10 +37,8 @@ function newUser()
 }
 function login(isNew)
 {
-    var whatToShow;
-    if (isNew === null)
-        whatToShow = "login";
-    else
+    var whatToShow = "login";
+    if (isNew === "new")
         whatToShow = "register";
     $("#loadingModal>div>h3").html("Loading login...");
     $("#loadingModal>div>div").html("Loading web socket scripts...");

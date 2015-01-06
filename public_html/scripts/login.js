@@ -38,7 +38,7 @@ function loginFormHandlers(showWhat)
         data.usrLName = $("#registerLastName").val();
         data.usrGender = $("#registerGender").val();
         data.usrBDay = $("#registerBirthday").val();
-        if (data.usrName === "" || data.usrEmail === "" || data.usrPw === "" || data.usrPw2 === "" || data.usrFName === "" || data.usrGender === "none" || data.usrBDay === "")
+        if (data.usrName === "" || data.usrEmail === "" || data.usrPw === "" || data.usrPw2 === "")
         {
             alert("Fill out all the form fields!");
             return;
@@ -51,18 +51,17 @@ function loginFormHandlers(showWhat)
         var newData = new Object();
         newData.usrName = CryptoJS.SHA3(data.usrName) + "";
         newData.pw = CryptoJS.SHA3(data.usrPw) + "";
-        newData.encoded = CryptoJS.AES.encrypt(JSON.stringify(data), data.usrPw);
+        newData.encoded = "" + CryptoJS.AES.encrypt(JSON.stringify(data), data.usrPw);
         newData.action = "register";
         var register = new Object();
         register.action = "userLoc";
-        register.username = data.usrName;
+        register.username = CryptoJS.SHA3(data.usrName) + "";
         storagerTask = "register";
         openLoading();
         cachedPw = data.usrPw;
         if (hasRelayConn)
         {
             waitingStatus = "userInfoRegister";
-
             dc.send(JSON.stringify(register));
             waitingData = newData;
         }
@@ -96,7 +95,7 @@ function loginFormHandlers(showWhat)
         }
         var login = new Object();
         login.action = "userLoc";
-        login.username = CryptoJS.SHA3(usrName);
+        login.username = CryptoJS.SHA3(usrName) + "";
         storagerTask = "login";
         openLoading();
         if (hasRelayConn)
@@ -149,7 +148,7 @@ function loginHandler(data)
             $("#connectingWindow>*").remove();
             $("#connectingWindow").append("<h3>Das Passwort stimmt nicht überein!</h3>" + closePopupWindow());
         }
-        else if (dataHash === CryptoJS.SHA3(dataO.data))
+        else if (dataHash === CryptoJS.SHA3(dataO.data) + "")
         {
             cbStartup(dataO.data, waitingData.pw);
         }
@@ -157,11 +156,11 @@ function loginHandler(data)
         {
             if (confirm("The hash of your data does not match the saved hash. This means, the storager has probably modified your data. Do you want to continue and review your data? If you press cancel, we will search a new storage handler..."))
             {
-                console.log("TODO: Data review (Ln: 144 login.js)");
+                console.log("TODO: Data review (Ln: 160 login.js)");
             }
             else
             {
-                console.log("TODO: Get a new storager connection (Ln: 148 login.js)");
+                console.log("TODO: Get a new storager connection (Ln: 164 login.js)");
             }
         }
     }
@@ -179,7 +178,7 @@ function loginHasStore()
     var dataCache = waitingData;
     var login = new Object();
     login.action = "login";
-    login.username = CryptoJS.SHA3(dataCache.username) + "";
+    login.username = dataCache.username;
     login.pwHash = CryptoJS.SHA3(dataCache.pw) + "";
     storagerDcs[personalDataStore].send(JSON.stringify(login));
     pcEvents[personalDataStore]["loginHandler"] = loginHandler;
@@ -192,8 +191,8 @@ function registerToRelay(id)
     obj.user = waitingData.usrName;
     var storagers = new Array();
     storagers.push(id);
-    obj.storagers = JSON.stringify(storagers);
-    obj.hash = CryptoJS.SHA3(JSON.stringify(waitingData.encoded));
+    obj.storagers = storagers;
+    obj.hash = CryptoJS.SHA3(waitingData.encoded) + "";
     dc.send(JSON.stringify(obj));
     registeredToRelay = true;
 }
@@ -208,7 +207,6 @@ function updateRegisterRelay(id)
 function registerToStorager(id)
 {
     var data = waitingData;
-    console.log("hiho");
     storagerDcs[id].send(JSON.stringify(data));
     if (!registeredToRelay)
     {
@@ -246,6 +244,7 @@ function nextRegisterClient()
 {
     if (registerIdsCache.length === 0)
     {
+        localforage.setItem("lastStatus", "firstStartup");
         cbStartup(waitingData.encoded, cachedPw);
         return;
     }
@@ -426,7 +425,7 @@ function doWebRTCConnect()
         pc = null;
         hasRelayConn = false;
     };
-    dc = pc.createDataChannel("client");
+    dc = pc.createDataChannel("client-relay");
     dc.onclose = function ()
     {
         console.warn("Relay connection closed. Trying to reconnect...");
@@ -472,7 +471,7 @@ function doWebRTCConnect()
                     }
                     else
                     {
-                        $.each(JSON.parse(data.stores), function () {
+                        $.each(data.stores, function () {
                             storagers.push(this);
                         });
                         dataHash = data.hash;
@@ -482,7 +481,7 @@ function doWebRTCConnect()
                             {
                                 waitingStatus = "connectStorageForLogin";
                                 $("#connectingWindow>div").html("Found your data!<br />Will now connect...");
-                                loadScript("scripts/storager.js", function() {
+                                loadScript("scripts/storagers.js", function() {
                                     getWorkingStorager(storagers, function(id) { newStorager(id, "login", storagers); }, "login");
                                 });
                             }
@@ -576,7 +575,12 @@ function cbStartup(data, pw)
 {
     $("#connectingWindow>*").html("");
     $("#connectingWindow").append("<h2>Startup...</h2><div>Login successfull! Now starting chatterbox...</div>");
-    decodedData = data; //Entschlüsseln
+    try {
+        decodedData = CryptoJS.AES.decrypt(data, pw).toString(CryptoJS.enc.Utf8); //Entschlüsseln
+    } catch(ex) {
+        console.warn("Data could not be decoded!");
+        return;
+    }
     loadScript("scripts/main.js");
 }
 var decodedData;

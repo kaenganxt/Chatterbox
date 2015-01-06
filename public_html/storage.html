@@ -42,15 +42,14 @@
                         }
                         else
                         {
-                            var userData = JSON.parse(userdata);
-                            if (userData.pwHash !== pw)
+                            if (userdata.pwHash !== pw)
                             {
                                 obj.status = "pwWrong";
                             }
                             else
                             {
                                 obj.status = "ok";
-                                obj.data = userData.enc;
+                                obj.data = userdata.enc;
                             }
                         }
                         datachannel.send(JSON.stringify(obj));
@@ -64,7 +63,7 @@
                     var obj = new Object();
                     obj.pwHash = pw;
                     obj.enc = enc;
-                    localforage.setItem("user_" + user + "_data", JSON.stringify(obj));
+                    localforage.setItem("user_" + user + "_data", obj);
                 }
             }
         </script>

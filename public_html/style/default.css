@@ -246,27 +246,26 @@ input#backToLogin:hover
 .screen
 {
     position:fixed;
-    top:4em;
-    left:4em;
-    width:100%;
-    height:100%;
+    top:10%;
+    left:15%;
+    right:15%;
+    bottom:5%;
     z-index:20;
-    background-color:#1e4c99;
+    background-color:#1A5F99;
     border-radius:7px;
-    padding:5em;
-    padding-top:1.5em;
+    padding:4%;
+    padding-top:1em;
 }
 .screenInfoBox
 {
-    width:30em;
+    width:70%;
     height:15em;
-    background-color:#1e4c98;
-    padding:1.5em;
+    padding:2%;
 }
 .screenButtonSet
 {
-    right:-1em;
-    margin-top:0.5em;
+    right:-60%;
+    margin-top:2em;
     bottom:0.5em;
     position:relative;
 }

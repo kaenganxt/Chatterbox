@@ -119,7 +119,7 @@ function initWebRTC(id)
             };
             pc.ondatachannel = function (event)
             {
-                dc = event.channel;
+                var dc = event.channel;
                 dcs[waitingForClient][num_dcs[waitingForClient]] = dc;
                 var dcSubId = num_dcs[dcId];
                 num_dcs[waitingForClient]++;

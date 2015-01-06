@@ -55,7 +55,7 @@ function newStoragerMsgHandler(rawData)
                 send(object);
             };
             storagerPcs[id] = pCC;
-            var dCC = pCC.createDataChannel("client");
+            var dCC = pCC.createDataChannel("client-storager");
             dCC.onclose = function () {
                 console.log("Data channel closed.");
                 storagerPcs[id].close();
@@ -133,11 +133,11 @@ function stOfferComplete(localOffer)
 {
     storagerPcs[currentConnectingId].setLocalDescription(localOffer, function() { stSendOffer(localOffer); }, stPcFail);
 }
-function stSendOffer(offer)
+function stSendOffer(stOffer)
 {
     var offerobj = new Object();
     offerobj.action = "startConn";
-    offerobj.offer = offer;
+    offerobj.offer = stOffer;
     send(offerobj);
 }
 function stPcFail(code)
