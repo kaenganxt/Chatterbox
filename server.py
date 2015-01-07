@@ -12,10 +12,10 @@ clients = dict()
 id = 0
 storagers = dict()
 relays = dict()
-unconfirmed = dict()
 rlId = 0
-unconfirmedCount = 0
+storagerCount = 0
 allowedHost = "http://localhost:8383"
+storagerByStr = dict()
       
     
 def is_json(myjson):
@@ -24,6 +24,12 @@ def is_json(myjson):
   except ValueError:
     return False
   return True  
+  
+def checkToken(token):
+    if not(len(token) == 20): # TODO: More refined testing
+        return False
+    else:
+        return True
   
 class IdHandler(tornado.web.RequestHandler):
     @tornado.web.asynchronous
@@ -48,21 +54,15 @@ class relayHandler(tornado.web.RequestHandler):
 
 class storageSocket(tornado.websocket.WebSocketHandler):
     def open(self, *args):
-        global unconfirmedCount
-        print("storage web socket opened!")
-        self.id = int(self.get_argument("Id"))
-        if self.id == -1:
-            unconfirmedCount += 1
-            self.id = unconfirmedCount
-            unconfirmed[unconfirmedCount] = self
-            if len(relays) == 0:
-                self.write_message(json.dumps({"action":"noRelays"}))
-                return
-                
-            list(relays.values())[0]["object"].write_message(json.dumps({"action":"dataNeeded", "method":"newStorager"}))
+        print("Storage web socket opened!")
+        token = self.get_argument("Id")
+        if not(checkToken(token)):
+            self.finish()
             return
-        
-        storagers[self.id] = {"id": self.id, "object": self, "status": "none", "client": "none", "reserved": "none"}
+        storagerCount += 1
+        self.id = storagerCount
+        storagers[self.id] = {"id": self.id, "strId": token, "object": self, "status": "none", "client": "none", "reserved": "none"}
+        storagerByStr[token] = self.id
         
     def on_message(self, message):
         if message == "clearStatus":
@@ -78,9 +78,8 @@ class storageSocket(tornado.websocket.WebSocketHandler):
             storagers[self.id]["client"]["object"].write_message(message)
         
     def on_close(self):
-        global unconfirmedCount
         if self.id in storagers:
-            print("storager socket closed!")
+            print("Storager socket closed!")
             if storagers[self.id]["status"] == "busy-connecting":
                 client = storagers[self.id]["client"]
                 client["status"] = "none"
@@ -91,9 +90,7 @@ class storageSocket(tornado.websocket.WebSocketHandler):
                 clients[storagers[self.id]["reserved"]]["reserved"].remove(self.id)
                 
             del storagers[self.id]
-        else:
-            del unconfirmed[self.id]
-            unconfirmedCount -= 1
+            del storagerByStr[storagers[self.id]['strId']]
             
     def check_origin(self, origin):
         return True
@@ -101,7 +98,7 @@ class storageSocket(tornado.websocket.WebSocketHandler):
   
 class relaySocket(tornado.websocket.WebSocketHandler):
     def open(self, *args):
-        print("relay web socket opened!")
+        print("Relay web socket opened!")
         self.id = self.get_argument("Id")
         self.stream.set_nodelay(True)
         relays[self.id] = {"id": self.id, "object": self, "status": "none", "client":"none"}
@@ -119,21 +116,13 @@ class relaySocket(tornado.websocket.WebSocketHandler):
             
         if is_json(message):
             msg = json.loads(message)
-            if msg["action"] == "newStorager":
-                if unconfirmedCount > 0:
-                    storagers[msg["id"]] = {"id": msg["id"], "object": unconfirmed[unconfirmedCount], "status": "none", "client":"none"}
-                    storagers[msg["id"]]["object"].write_message(json.dumps({"action":"your_id","id":msg["id"]}))
-                    storagers[msg["id"]]["object"].id = msg["id"]
-                    del unconfirmed[unconfirmedCount]
-                    unconfirmedCount -= 1
-                return
             
         if relays[self.id]["status"] == "busy-connecting":
             relays[self.id]["client"]["object"].write_message(message)
         
     def on_close(self):
         if self.id in relays:
-            print("relay socket closed!")
+            print("Relay socket closed!")
             if relays[self.id]["status"] == "busy-connecting":
                 client = relays[self.id]["client"]
                 client["status"] = "none"
@@ -146,7 +135,7 @@ class relaySocket(tornado.websocket.WebSocketHandler):
      
 class WebSocketHandler(tornado.websocket.WebSocketHandler):
     def open(self, *args):
-        print("client web socket open")
+        print("Client web socket openened!")
         self.id = self.get_argument("Id")
         self.stream.set_nodelay(True)
         clients[self.id] = {"id": self.id, "object": self, "status": "none", "conn": "none", "reserved": "none"}
@@ -188,8 +177,8 @@ class WebSocketHandler(tornado.websocket.WebSocketHandler):
                     self.write_message(json.dumps({"action":"no"}))
                     
         elif data["action"] == "storagerStatus":
-            if data["id"] in storagers:
-                storager = storagers[data['id']]
+            if data["id"] in storagerByStr:
+                storager = storagers[storagerByStr[data['id']]]
                 if storager["status"] == "none" or (storager["status"] == "reserved" and storager["reserved"] == self.id):
                     self.write_message(json.dumps({"action":"storagerStatus", "status":"available", "id":data["id"]}))
                 else:
@@ -198,10 +187,10 @@ class WebSocketHandler(tornado.websocket.WebSocketHandler):
                 self.write_message(json.dumps({"action":"storagerStatus", "status":"offline", "id":data["id"]}))
                 
         elif data["action"] == "connectStorager":
-            if data["id"] not in storagers:
+            if data["id"] not in storagersByStr:
                 self.write_message(json.dumps({"action":"connStorager", "status":"no"}))
             else:
-                storager = storagers[data["id"]]
+                storager = storagers[storagersByStr[data["id"]]]
                 if not(storager["status"] == "none") and not(storager["status"] == "reserved" and storager["reserved"] == self.id):
                     self.write_message(json.dumps({"action":"connStorager", "status":"busy"}))
                 else:
@@ -221,7 +210,6 @@ class WebSocketHandler(tornado.websocket.WebSocketHandler):
             currCount = 0
             foundStores = []
             if len(storagers) == 0:
-                print("none")
                 self.write_message(json.dumps({"action": "registerClientIds", "status": "error"}))
                 return
                 
@@ -231,18 +219,16 @@ class WebSocketHandler(tornado.websocket.WebSocketHandler):
                     break
                 storager = storagers[storagerId]
                 if storager["status"] == "none":
-                    foundStores.append(storager["id"])
+                    foundStores.append(storager["strId"])
                     storager["status"] = "reserved"
                     storager["reserved"] = self.id
             
-            print(foundStores)
             clients[self.id]["reserved"] = foundStores
-            print(json.dumps({"action": "registerClientIds", "ids": foundStores}))
             self.write_message(json.dumps({"action": "registerClientIds", "ids": foundStores}))
 
     def on_close(self):
         if self.id in clients:
-            print("web socket close")
+            print("Web socket closed!")
             if clients[self.id]["status"] == "busy-connecting":
                 conn = clients[self.id]["conn"]
                 conn["object"].write_message(json.dumps({"action":"clientConnClose", "id":self.id}))
@@ -251,7 +237,7 @@ class WebSocketHandler(tornado.websocket.WebSocketHandler):
             
             if clients[self.id]["reserved"] != "none":
                 for storagerId in clients[self.id]["reserved"]:
-                    storager = storagers[storagerId]
+                    storager = storagers[storagerByStr[storagerId]]
                     storager["status"] = "none"
                     storager["reserved"] = "none"
             

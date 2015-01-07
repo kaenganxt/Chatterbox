@@ -23,7 +23,9 @@ function initWS()
         localforage.getItem("storage_id").then(function (id) {
             if (!id)
             {
-                initWebRTC(-1);
+                var hash = generateStr();
+                initWebRTC(hash);
+                localforage.setItem("storage_id", hash);
             }
             else
             {
@@ -183,7 +185,7 @@ function initWebRTC(id)
     {
         console.log("Socket closed");
         document.getElementsByTagName("title")[0].innerHTML = "Reconnect...";
-        window.location.reload();
+       // window.location.reload();
     };
 }
 function iceSuccess() {

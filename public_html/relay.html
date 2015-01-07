@@ -15,28 +15,7 @@
         <script type="text/javascript">
             function wsMessage(data)
             {
-                if (data.action === "dataNeeded")
-                {
-                    if (data.method === "newStorager")
-                    {
-                        localforage.getItem("storager_count").then(function (count) {
-                            var countObj = new Object();
-                            countObj.action = "newStorager";
-                            if (!count)
-                            {
-                                countObj.id = 1;
-                                localforage.setItem("storager_count", 1);
-                            }
-                            else
-                            {
-                                count++;
-                                countObj.id = count;
-                                localforage.setItem("storager_count", count);
-                            }
-                            send(countObj);
-                        });
-                    }
-                }
+                
             }
             function pcMessage(data, dc)
             {
