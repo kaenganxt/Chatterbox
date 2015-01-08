@@ -94,8 +94,8 @@ class storageSocket(tornado.websocket.WebSocketHandler):
             if storagers[self.id]["status"] == "reserved":
                 clients[storagers[self.id]["reserved"]]["reserved"].remove(self.id)
                 
-            del storagers[self.id]
             del storagerByStr[storagers[self.id]['strId']]
+            del storagers[self.id]
             
     def check_origin(self, origin):
         return True
