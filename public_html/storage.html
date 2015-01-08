@@ -15,7 +15,7 @@
         <script type="text/javascript">
             
             function generateStr() {
-                var chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890!?#+*/-+|%&§";
+                var chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890!?#+*/-+|%&";
                 var string = "";
                 for (var i = 0; i < 20; i++) {
                     string += chars[Math.floor(Math.random()*chars.length)];
@@ -30,6 +30,8 @@
                     setTimeout(function () {
                         window.location.reload();
                     }, 1000);
+                } else if (data.action === "close" && data.type === "invalidToken") {
+                    localforage.removeItem("storage_id");
                 }
             }
             function pcMessage(data, datachannel)

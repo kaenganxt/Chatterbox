@@ -185,7 +185,7 @@ function initWebRTC(id)
     {
         console.log("Socket closed");
         document.getElementsByTagName("title")[0].innerHTML = "Reconnect...";
-       // window.location.reload();
+        window.location.reload();
     };
 }
 function iceSuccess() {

@@ -26,9 +26,12 @@ def is_json(myjson):
   return True  
   
 def checkToken(token):
-    if not(len(token) == 20): # TODO: More refined testing
+    if not(len(token) == 20):
         return False
     else:
+        allowed = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890!?#+*/-+|%&"
+        for char in token:
+            if char not in allowed: return False
         return True
   
 class IdHandler(tornado.web.RequestHandler):
@@ -54,10 +57,12 @@ class relayHandler(tornado.web.RequestHandler):
 
 class storageSocket(tornado.websocket.WebSocketHandler):
     def open(self, *args):
+        global storagerCount
         print("Storage web socket opened!")
         token = self.get_argument("Id")
         if not(checkToken(token)):
-            self.finish()
+            self.write_message(json.dumps({"action": "close", "type": "invalidToken"}))
+            self.close()
             return
         storagerCount += 1
         self.id = storagerCount
@@ -187,10 +192,10 @@ class WebSocketHandler(tornado.websocket.WebSocketHandler):
                 self.write_message(json.dumps({"action":"storagerStatus", "status":"offline", "id":data["id"]}))
                 
         elif data["action"] == "connectStorager":
-            if data["id"] not in storagersByStr:
+            if data["id"] not in storagerByStr:
                 self.write_message(json.dumps({"action":"connStorager", "status":"no"}))
             else:
-                storager = storagers[storagersByStr[data["id"]]]
+                storager = storagers[storagerByStr[data["id"]]]
                 if not(storager["status"] == "none") and not(storager["status"] == "reserved" and storager["reserved"] == self.id):
                     self.write_message(json.dumps({"action":"connStorager", "status":"busy"}))
                 else:
