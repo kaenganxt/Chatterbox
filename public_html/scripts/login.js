@@ -1,16 +1,7 @@
 var host = wsHost;
-var config = {
-    'iceServers': [
-        {
-            url: 'turn:5.231.50.161:3478',
-            credential: 'passwort',
-            username: 'chatterboxAccount'
-        }
-    ]
-};
-var storagerTask = "none";
-var registerIdsCache;
-var cachedPw;
+var dataCache = new Array();
+var loginWaitingFor = "";
+var relayBlacklist = new Array();
 function loginFormHandlers(showWhat)
 {
     $("#loadingModal").hide();
@@ -29,6 +20,9 @@ function loginFormHandlers(showWhat)
     }
     $("#registerForm").bind("submit", function (e) {
         e.preventDefault();
+        if (loginWaitingFor !== "") {
+            return;
+        }
         var data = new Object();
         data.usrName = $("#registerUsername").val();
         data.usrEmail = $("#registerEmail").val();
@@ -56,36 +50,35 @@ function loginFormHandlers(showWhat)
         var register = new Object();
         register.action = "userLoc";
         register.username = CryptoJS.SHA3(data.usrName) + "";
-        storagerTask = "register";
-        openLoading();
-        cachedPw = data.usrPw;
+        dataCache['registerPw'] = data.usrPw;
+        var afterRelayConn = function () {
+            relay.registerListener("userInfo", onUserInfo);
+            relay.sendObj(register);
+            loginWaitingFor = "register";
+        };
         if (hasRelayConn)
         {
-            waitingStatus = "userInfoRegister";
-            dc.send(JSON.stringify(register));
-            waitingData = newData;
+            afterRelayConn();
         }
         else if (hasWebSocket)
         {
-            relayReconnect();
-            afterRelayConnect = function () {
-                dc.send(JSON.stringify(register));
-                waitingStatus = "userInfoRegister";
-            };
-            waitingData = newData;
+            openLoading();
+            makeRelayConn(afterRelayConn);
         }
         else
         {
-            initWS(initWebRTC);
-            afterRelayConnect = function () {
-                dc.send(JSON.stringify(register));
-                waitingStatus = "userInfoRegister";
-            };
-            waitingData = newData;
+            openLoading();
+            initWS(function() {
+                makeRelayConn(afterRelayConn);
+            });
         }
+        dataCache['register'] = newData;
     });
     $("#loginForm").bind("submit", function (e) {
         e.preventDefault();
+        if (loginWaitingFor !== "") {
+            return;
+        }
         var usrName = $("#loginUsername").val();
         var usrPw = $("#loginPassword").val();
         if (usrName === "" || usrPw === "")
@@ -96,39 +89,101 @@ function loginFormHandlers(showWhat)
         var login = new Object();
         login.action = "userLoc";
         login.username = CryptoJS.SHA3(usrName) + "";
-        storagerTask = "login";
-        openLoading();
+        var afterRelayConn = function () {
+            relay.registerListener("userInfo", onUserInfo);
+            relay.sendObj(login);
+            loginWaitingFor = "login";
+        };
         if (hasRelayConn)
         {
-            waitingStatus = "userInfoLogin";
-            dc.send(JSON.stringify(login));
-            login.pw = usrPw;
-            waitingData = login;
+            afterRelayConn();
         }
         else if (hasWebSocket)
         {
-            relayReconnect();
-            var loginCopy = login;
-            afterRelayConnect = function () {
-                dc.send(JSON.stringify(loginCopy));
-                waitingStatus = "userInfoLogin";
-            };
-            login.pw = usrPw;
-            waitingData = login;
+            openLoading();
+            makeRelayConn(afterRelayConn);
         }
         else
         {
             openLoading();
-            initWS(initWebRTC);
-            var loginCopy = login;
-            afterRelayConnect = function () {
-                dc.send(JSON.stringify(loginCopy));
-                waitingStatus = "userInfoLogin";
-            };
-            login.pw = usrPw;
-            waitingData = login;
+            initWS(function() {
+                makeRelayConn(afterRelayConn);
+            });
         }
+        dataCache['loginPw'] = usrPw;
+        dataCache['login'] = login;
     });
+}
+function onUserInfo(info) {
+    var data = JSON.parse(info);
+    if (data.action === "getUserInfo")
+    {
+        if (loginWaitingFor === "login")
+        {
+            if (data.status === "requestOther")
+            {
+                relay.clearVars();
+                makeRelayConn(function() {
+                    window.relay.registerListener("userInfo", onUserInfo);
+                    var loginCopy = dataCache['login'];
+                    window.relay.sendObj(loginCopy);
+                }, relay.getId());
+            }
+            else if (data.status === "notKnown")
+            {
+                $("#connectingPopup").fadeOut();
+                alert("You are not registered in this network! If you are, and this message is wrong, please contact us!");
+                loginWaitingFor = "";
+            }
+            else
+            {
+                dataCache['login'].storagers = new Array();
+                $.each(data.stores, function () {
+                    dataCache['login'].storagers.push(this);
+                });
+                dataCache['login'].hash = data.hash;
+                loginWaitingFor = "storageLogin";
+                var stConnect = function() {
+                    var callback = {
+                        connected: function(pc) {
+                            loginHasStore();
+                        },
+                        check: function() {
+                            return confirm("There's currently no storage handler with your data available. Do you want to try it again regulary?");
+                        },
+                        notAvailable: function() {
+                            $("#connectingWindow>div").html("No storage handler with your data available!<br />Please try again later"+closePopupWindow());
+                        }
+                    };
+                    new StoragerConnect("personal", dataCache['login'].storagers, callback).start();
+                };
+                if (typeof storagers === "undefined") {
+                    loadScript("scripts/storagers.js", stConnect);
+                } else if ("personal" in storagers) {
+                    loginHasStore();
+                } else {
+                    stConnect();
+                }
+            }
+        }
+        else if (loginWaitingFor === "register")
+        {
+            if (data.status !== "notKnown")
+            {
+                alert("This username already exists! Please choose another one.");
+                loginWaitingFor = "";
+                $("#registerUsername").val("");
+                $("#connectingPopup").hide();
+            }
+            else
+            {
+                var data = {"action": "getlist", "type": "storager", "count": 10};
+                window.send(data);
+                $("#connectingWindow>h3").html("Performing Registration...");
+                $("#connectingWindow>div").html("Getting available storage handlers...");
+            }
+        }
+    }
 }
 function loginHandler(data)
 {
@@ -137,77 +192,112 @@ function loginHandler(data)
     {
         if (dataO.status === "notKnown")
         {
-            storageBlacklistAdd(personalDataStore);
-            storagerDcs[personalDataStore].close();
-            storagerPcs[personalDataStore].close();
-            personalDataStore = undefined;
-            getWorkingStorager(storagerCache["personal"], function(id) { newStorager(id, "login", storagerCache['personal']); }, "login");
+            storageBlacklistAdd(storagers["personal"].getId());
+            storagers["personal"].getPeerConn().close();
+            storagers["personal"].start();
         }
         else if (dataO.status === "pwWrong")
         {
             $("#connectingWindow>*").remove();
-            $("#connectingWindow").append("<h3>Das Passwort stimmt nicht überein!</h3>" + closePopupWindow());
+            $("#connectingWindow").append("<h3>The password is wrong!</h3>" + closePopupWindow());
         }
-        else if (dataHash === CryptoJS.SHA3(dataO.data) + "")
+        else if (dataCache['login'].hash === CryptoJS.SHA3(dataO.data) + "")
         {
-            cbStartup(dataO.data, waitingData.pw);
+            cbStartup(dataO.data, dataCache['loginPw']);
         }
         else
         {
-            if (confirm("The hash of your data does not match the saved hash. This means, the storager has probably modified your data. Do you want to continue and review your data? If you press cancel, we will search a new storage handler..."))
+            if (confirm("The hash of your data does not match the saved hash. This means the storager has probably modified your data. Do you want to continue and review your data? If you press cancel, we will search a new storage handler."))
             {
-                console.log("TODO: Data review (Ln: 160 login.js)");
+                console.log("TODO: Data review (Ln: 250 login.js)");
             }
             else
             {
-                console.log("TODO: Get a new storager connection (Ln: 164 login.js)");
+                console.log("TODO: Get a new storager connection (Ln: 250 login.js)");
             }
         }
     }
 }
-function resendRegisterInfo()
-{
-    var register = new Object();
-    register.action = "userLoc";
-    register.username = waitingData.usrName;
-    dc.send(JSON.stringify(register));
-    waitingStatus = "userInfoRegister";
+wsHandlers["login"] = wsHandler;
+function wsHandler(msg) {
+    if (loginWaitingFor !== "register") {
+        return;
+    }
+    var data = JSON.parse(msg);
+    if (data.action === "getlist") {
+        $("#connectingPopup").show();
+        if (data.status === "error")
+        {
+            loginWaitingFor = "";
+            $("#connectingWindow").html("");
+            $("#connectingWindow").append("<h3><span style='color:red'>Error: </span>Currently are no storage handlers available. Please try again later.</h3>" + closePopupWindow());
+        }
+        else
+        {
+            dataCache["registerIds"] = data.ids;
+            dataCache["registerCount"] = 0;
+            var callback = {
+                haveOne: function(id) {
+                    registerToStorager(id);
+                    dataCache["registerCount"]++;
+                },
+                done: function() {
+                    if (dataCache["registerCount"] === 0) {
+
+                    } else {
+                        localforage.setItem("lastStatus", "firstStartup");
+                        cbStartup(dataCache['register'].encoded, dataCache['registerPw']);
+
+                    }
+                    loginWaitingFor = "";
+                }
+            };
+            var registerFunc = function() {
+                new StoragerConnect("register", data.ids, callback, true).start();
+            };
+            if (typeof storagers === "undefined") {
+                loadScript("scripts/storagers.js", registerFunc);
+            } else {
+                registerFunc();
+            }
+        }
+    }
 }
 function loginHasStore()
 {
-    var dataCache = waitingData;
     var login = new Object();
     login.action = "login";
-    login.username = dataCache.username;
-    login.pwHash = CryptoJS.SHA3(dataCache.pw) + "";
-    storagerDcs[personalDataStore].send(JSON.stringify(login));
-    pcEvents[personalDataStore]["loginHandler"] = loginHandler;
+    login.username = dataCache['login'].username;
+    login.pwHash = CryptoJS.SHA3(dataCache['loginPw']) + "";
+    var peerconn = storagers["personal"].getPeerConn();
+    peerconn.sendObj(login);
+    peerconn.registerListener("loginHandler", loginHandler);
 }
 var registeredToRelay = false;
 function registerToRelay(id)
 {
     var obj = new Object();
     obj.action = "register";
-    obj.user = waitingData.usrName;
+    obj.user = dataCache['register'].usrName;
     var storagers = new Array();
     storagers.push(id);
     obj.storagers = storagers;
-    obj.hash = CryptoJS.SHA3(waitingData.encoded) + "";
-    dc.send(JSON.stringify(obj));
+    obj.hash = CryptoJS.SHA3(dataCache['register'].encoded) + "";
+    relay.sendObj(obj);
     registeredToRelay = true;
 }
 function updateRegisterRelay(id)
 {
     var obj = new Object();
     obj.action = "addStore";
-    obj.user = waitingData.usrName;
+    obj.user = dataCache['register'].usrName;
     obj.storager = id;
-    dc.send(JSON.stringify(obj));
+    relay.sendObj(obj);
 }
 function registerToStorager(id)
 {
-    var data = waitingData;
-    storagerDcs[id].send(JSON.stringify(data));
+    var data = dataCache['register'];
+    storagerConns[id].sendObj(data);
     if (!registeredToRelay)
     {
         if (hasRelayConn)
@@ -216,11 +306,9 @@ function registerToStorager(id)
         }
         else
         {
-            afterRelayConnect = function () {
+            makeRelayConn(function () {
                 registerToRelay(id);
-            };
-            pc = null;
-            relayReconnect();
+            });
         }
     }
     else
@@ -231,335 +319,40 @@ function registerToStorager(id)
         }
         else
         {
-            afterRelayConnect = function () {
+            makeRelayConn(function () {
                 updateRegisterRelay(id);
-            };
-            pc = null;
-            relayReconnect();
+            });
         }
     }
-    nextRegisterClient();
-}
-function nextRegisterClient()
-{
-    if (registerIdsCache.length === 0)
-    {
-        localforage.setItem("lastStatus", "firstStartup");
-        cbStartup(waitingData.encoded, cachedPw);
-        return;
-    }
-    var id = registerIdsCache.pop();
-    console.log("Registering to:" + id);
-    if (typeof storagerIds !== "undefined" && storagerIds !== null && $.inArray(id, storagerIds) !== -1)
-    {
-        registerToStorager(id);
-    }
-    if (typeof storagerPcs === "undefined" || storagerPcs === null)
-    {
-        var ida = new Array(-1, id);
-        loadScript("scripts/storagers.js", function() {
-            getWorkingStorager(ida, function(idd) { newStorager(idd, "register", ida); }, "register");
-        });
-    }
-    else
-    {
-        var ida = new Array(-1, id);
-        getWorkingStorager(ida, function(idd) { newStorager(idd, "register", ida); }, "register");
-    }
 }
 
-
-
-//Relay section
-var pc = null;
-var dc = null;
-var offer = null;
-var waitingStatus = "no";
-var waitingData = new Object();
-var PeerConnection = window.RTCPeerConnection || window.mozRTCPeerConnection || window.webkitRTCPeerConnection;
-var SessionDescription = window.RTCSessionDescription || window.mozRTCSessionDescription || window.webkitRTCSessionDescription;
-var IceCandidate = window.RTCIceCandidate || window.mozRTCIceCandidate || window.webkitRTCIceCandidate;
-var afterRelayConnect = null;
 var hasRelayConn = false;
 var hasWebSocket = false;
-var currentRelayId = null;
-var forceOtherRelay = false;
-var storagers = new Array();
-var dataHash = null;
+var relay;
 
-function relayReconnect()
-{
-    if (pc === null)
-    {
-        dc = null;
-        pc = null;
-        if (ws === null || ws.readyState === 3)
-        {
-            ws = null;
-            setTimeout(initWebRTC, 500);
-        }
-        else
-        {
-            initWebRTC();
-        }
-    }
-    else
-    {
-        console.log("WTF!?");
-    }
-}
-
-function relayWSHandler(json)
-{
-    if (json === "relayConnClose")
-    {
-        pc = null;
-        relayReconnect();
+function makeRelayConn(callback) {
+    if (typeof RTCConnection === "undefined") {
+        loadScript("scripts/rtcConns.js", function() { makeRelayConn(callback); });
         return;
     }
-    if (waitingStatus === "search")
-    {
-        var data = JSON.parse(json);
-        if (data.action === "no")
-        {
-            $("#connectingWindow>*").hide();
-            $("#connectingWindow").append("<h3 style='color:red;'>Error: No services available!</h3><div>Try again later!</div>" + closePopupWindow());
-        }
-        else if (data.action === "busy")
-        {
-            $("#connectingWindow>div").html("Please wait, the system is busy at the moment...");
-            var data = new Object();
-            data.other = forceOtherRelay;
-            data.action = "search";
-            if (data.other)
-                data.not = currentRelayId;
-            setTimeout(function () {
-                send(data);
-            }, 500);
-            console.log("busy...");
-        }
-        else if (data.action === "connect")
-        {
-            currentRelayId = data.relay;
-            waitingStatus = "relayRTCConnect";
-            forceOtherRelay = false;
-            doWebRTCConnect();
-        }
-    }
-    else if (waitingStatus === "relayRTCConnect")
-    {
-        var data = JSON.parse(json);
-        if (data.action === "answerDesc")
-        {
-            pc.setRemoteDescription(new SessionDescription(data.answer), finished, offerFail);
-        }
-        else if (data.action === "candidate") {
-            pc.addIceCandidate(new IceCandidate(data.candidate), iceSuccess, iceFail);
-        }
-    }
-    else
-    {
-        var data = JSON.parse(json);
-        if (data.action === "registerClientIds")
-        {
-            if (data.status === "error")
-            {
-                waitingStatus = "no";
-                $("#connectingWindow").html("");
-                $("#connectingWindow").append("<h3><span style='color:red'>Error: </span>Currently are no storage handlers available. Please try again later.</h3>" + closePopupWindow());
-            }
-            else
-            {
-                registerIdsCache = data.ids;
-                console.log("Found to the following storage handlers: ");
-                console.log(registerIdsCache);
-                if (hasRelayConn)
-                {
-                    nextRegisterClient();
-                }
-                else
-                {
-                    pc = null;
-                    afterRelayConnect = resendRegisterInfo;
-                    relayReconnect();
-                }
-
-            }
-        }
-    }
+    relay = new RTCConnection();
+    relay.init("relay", -1, function() { hasRelayConn = true; callback(); }, relayConnFail);
 }
-function initWebRTC()
-{
-    var data = new Object();
-    data.action = "search";
-    data.other = forceOtherRelay;
-    if (data.other)
-        data.not = currentRelayId;
-    waitingStatus = "search";
-    send(data);
-    wsHandlers["relayWSHandler"] = relayWSHandler;
+function relayConnFail() {
+    relay = null;
+    makeRelayConn(relayReconnected);
+    hasRelayConn = false;
+    //TODO: React to possible situations
 }
-function iceSuccess() {
-    console.log("Successfully added an ice candidate");
+function relayReconnected() {
+    console.log("Connection rebuilt!");
 }
-function iceFail() {
-    console.warn("Adding an ice candidate failed!");
-}
-function finished() {
-    console.log("Connection creation finished!");
-}
-function doWebRTCConnect()
-{
-    pc = new PeerConnection(config);
-    pc.onicecandidate = function (e) {
-        var object = new Object();
-        object.action = "candidate";
-        object.candidate = e.candidate;
-        ws.send(JSON.stringify(object));
-    };
-    pc.onconnection = function () {
-        console.log("Connected!");
-    };
-    pc.onclosedconnection = function () {
-        console.log("Conn Closed!");
-        pc = null;
-        hasRelayConn = false;
-    };
-    dc = pc.createDataChannel("client-relay");
-    dc.onclose = function ()
-    {
-        console.warn("Relay connection closed. Trying to reconnect...");
-        pc = null;
-        hasRelayConn = false;
-        relayReconnect();
-    };
-    dc.onmessage = function (evt)
-    {
-        if (evt.data instanceof Blob)
-        {
-            console.log("Received a blob!");
-        }
-        else if (evt.data === "opened")
-        {
-            dc.send("hello");
-            ws.send("clearStatus");
-            console.log("Connection is ready to be used! We will now gather some data from the relay!");
-            hasRelayConn = true;
-            waitingStatus = "no";
-            if (typeof afterRelayConnect === "function")
-            {
-                afterRelayConnect();
-            }
-        }
-        else
-        {
-            var data = JSON.parse(evt.data);
-            if (data.action === "getUserInfo")
-            {
-                if (waitingStatus === "userInfoLogin")
-                {
-                    if (data.status === "requestOther")
-                    {
-                        forceOtherRelay = true;
-                        pc = null;
-                        relayReconnect();
-                    }
-                    else if (data.status === "notKnown")
-                    {
-                        $("#connectingPopup").fadeOut();
-                        alert("You are not registered in this network! If you are, and this message is wrong, please contact us!");
-                    }
-                    else
-                    {
-                        $.each(data.stores, function () {
-                            storagers.push(this);
-                        });
-                        dataHash = data.hash;
-                        if (typeof personalDataStore === "undefined" || personalDataStore === null)
-                        {
-                            if (typeof storagerPcs === "undefined")
-                            {
-                                waitingStatus = "connectStorageForLogin";
-                                $("#connectingWindow>div").html("Found your data!<br />Will now connect...");
-                                loadScript("scripts/storagers.js", function() {
-                                    getWorkingStorager(storagers, function(id) { newStorager(id, "login", storagers); }, "login");
-                                });
-                            }
-                            else
-                            {
-                                getWorkingStorager(storagers, function(id) { newStorager(id, "login", storagers); }, "login");
-                            }
-                        }
-                        else
-                        {
-                            loginHasStore();
-                        }
-                    }
-                }
-                else if (waitingStatus === "userInfoRegister")
-                {
-                    if (data.status !== "notKnown")
-                    {
-                        alert("This username already exists! Please choose another one.");
-                        waitingStatus = "no";
-                        $("#registerUsername").val("");
-                        $("#connectingPopup").hide();
-                    }
-                    else
-                    {
-                        var data = new Object();
-                        data.action = "reserveRegisterClients";
-                        $("#connectingWindow>h3").html("Performing Registration...");
-                        $("#connectingWindow>div").html("Getting available storage handlers...");
-                        send(data);
-                    }
-                }
-            }
-
-        }
-    };
-    pc.createOffer(offerStep, offerFail);
-}
-function offerStep(locOffer)
-{
-    offer = locOffer;
-    pc.setLocalDescription(offer, offerStep2, offerFail);
-}
-function offerStep2()
-{
-    var init = new Object();
-    init.action = "startConn";
-    init.offer = offer;
-    send(init);
-}
-function offerFail(code)
-{
-    console.error("Failed to establish RTC: " + code);
-}
-function send(msg)
-{
-    if (ws !== null)
-    {
-        ws.send(JSON.stringify(msg));
-    }
-}
-function disconnect()
-{
-    if (dc !== null)
-    {
-        dc.send("bye");
-        dc = null;
-    }
-    if (pc !== null)
-    {
-        pc.close();
-        pc = null;
-    }
-}
+//TODO: Some disconnect mechanism
 
 $(document).ready(function () {
     $("body").on("click", ".closeLoadingPopup", function () {
         $("#connectingPopup").hide();
+        loginWaitingFor = "";
     });
 });
 function openLoading()
@@ -576,11 +369,10 @@ function cbStartup(data, pw)
     $("#connectingWindow>*").html("");
     $("#connectingWindow").append("<h2>Startup...</h2><div>Login successfull! Now starting chatterbox...</div>");
     try {
-        decodedData = CryptoJS.AES.decrypt(data, pw).toString(CryptoJS.enc.Utf8); //Entschlüsseln
+        dataCache['decoded'] = CryptoJS.AES.decrypt(data, pw).toString(CryptoJS.enc.Utf8);
     } catch(ex) {
-        console.warn("Data could not be decoded!");
+        console.error("Data could not be decoded!");
         return;
     }
     loadScript("scripts/main.js");
 }
-var decodedData;

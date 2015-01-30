@@ -8,9 +8,10 @@
         <script type="text/javascript" src="config.js"></script>
         <script type="text/javascript">
             //Startup loading
+            var handler = {"hasListeners": true, "type": "client"};
             $(document).ready(function () {
                 $("<link/>", {rel: "stylesheet", type: "text/css", href: "style/default.css"}).appendTo("head");
-                loadScript("scripts/dialog.js", function() { 
+                loadScript("scripts/dialog.js", function() {
                     loadScript("postload/modalDialog.html", function(html) {
                         $("body").append(html);
                         $("#loadingModal").addClass("md-show");
@@ -18,6 +19,7 @@
                         loadScript("libs/jq.ui.js", function() {
                             $("#loadingModal>div>div").html("Loading localForage...");
                             loadScript("libs/localForage.js", function() {
+                                localforage.config(lfConfig);
                                 $("#loadingModal>div>div").html("Loading Crypto-JS...");
                                 loadScript("libs/cryptoJs.js", function() {
                                     $("#loadingModal>div>div").html("Loading storage setup...");
@@ -25,12 +27,12 @@
                                 });
                             });
                         });
-                    }, false); 
+                    }, false);
                 });
             });
             function loadScript(script, callback, isScript) {
-                if (isScript === null) isScript = true;
-                if (callback === null) callback = function() {};
+                if (typeof isScript === "undefined" || isScript === null) isScript = true;
+                if (typeof callback === "undefined" || callback === null) callback = function() {};
                 if (!isScript) {
                     $.ajax({
                         url: script,
@@ -53,7 +55,7 @@
             <div style="background-color:#ab4639;position:fixed;top:5em;width:30%;height:6em;font-size:200%;z-index:10;padding:1em;border-radius:10px;left:35%;">
                 You have to enable JavaScript to use this site.
             </div>
-            <div style="background-color:rgba(110,110,110,0.5);position:fixed;width:100%;height:100%;top:0;left:0;margin:0;z-index:5">      
+            <div style="background-color:rgba(110,110,110,0.5);position:fixed;width:100%;height:100%;top:0;left:0;margin:0;z-index:5">
             </div>
         </div>
         </noscript>

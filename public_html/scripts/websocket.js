@@ -1,39 +1,36 @@
-var afterConnect;
 var ws;
 var wsHandlers = new Object();
+var wsToken;
+var connecting = false;
+var wsCallback;
 
 function initWS(callback)
 {
-    // openLoading();
-    afterConnect = callback;
-    $.ajax({
-        url: "http://" + host + ":8888/id",
-        success: function (id)
-        {
-            doWS(id);
-        },
-        error: function ()
-        {
-            $("#connectingWindow>*").hide();
-            $("#connectingWindow").append("<h3 style='color:red;'>Error: Service not available!</h3><div>Try again later!</div>");
-        }
-    });
-}
-function doWS(id)
-{
+    if (typeof canConnect !== "undefined" && canConnect === false) {
+        setTimeout(function() { initWS(callback); }, 10);
+        return;
+    }
+    if (connecting) {
+        wsCallback = function() {wsCallback(); callback();};
+        return;
+    }
+    wsCallback = callback;
     if (ws !== null)
     {
         ws = null;
         hasWebSocket = false;
     }
-    ws = new WebSocket("ws://" + host + ":8888/ws?Id=" + id);
+    var connecting = true;
+    var token = wsToken;
+    var tokenStr = token === null ? "" : "&token="+token;
+    ws = new WebSocket("ws://" + wsHost + ":" + wsPort + "/socket?type="+handler["type"] + tokenStr);
     ws.onopen = function () {
         console.log("WS Connected!");
         hasWebSocket = true;
-        if (typeof afterConnect === "function")
+        connecting = false;
+        if (typeof callback === "function")
         {
-            afterConnect();
-            afterConnect = null;
+            wsCallback();
         }
     };
     ws.onmessage = function (evt) {
@@ -42,8 +39,15 @@ function doWS(id)
         });
     };
     ws.onclose = function () {
-        console.log("Ws closed.");
+        connecting = false;
         hasWebSocket = false;
         setTimeout(initWS, 1000);
     };
+}
+function send(msg)
+{
+    if (ws !== null)
+    {
+        ws.send(JSON.stringify(msg));
+    }
 }

@@ -1,9 +1,4 @@
 console.log("Using " + localforage.driver());
-localforage.config({
-    name: "Chatterbox",
-    storeName: "chatterbox",
-    description: "The chatterbox local data."
-});
 localforage.getItem("lastseen").then(function (lastseen) {
     if (!lastseen)
     {
@@ -27,7 +22,6 @@ localforage.getItem("lastseen").then(function (lastseen) {
             login();
         }
     });
-    console.log("Last seen: " + lastseen);
 });
 function newUser()
 {
@@ -49,6 +43,7 @@ function login(isNew)
             loadScript("postload/login.html", function(html) {
                 $("body").append(html);
                 loginFormHandlers(whatToShow);
+                $("title").html("Chatterbox login");
             }, false);
         });
     });

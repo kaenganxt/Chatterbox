@@ -14,15 +14,19 @@ function mainSetup(status)
            <input type='button' value='Continue' class='screenButtonContinue' />&nbsp;&nbsp;&nbsp;\
            <input type='button' value='Skip' id='setupButtonSkip' /></div></div>\
            </div>").appendTo("#mainElement");
-    } else {    
+        $("title").html("Chatterbox configuration");
+    } else {
     }
 }
 localforage.getItem("lastStatus").then(function (status)
 {
     $("<div id='mainElement'><!-- The main chatterbox network elements --></div>").appendTo("body");
     $("#login, #loadingModal, #loadingOverlay").hide();
-    if (status === "firstStartup" || status === "configure")
+    if (status === "firstStartup" || status === "configure" || status === "no")
     {
+        if (status === "no") {
+            status = "firstStartup";
+        }
         mainSetup(status);
     }
     else

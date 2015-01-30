@@ -1,5 +1,4 @@
 <!DOCTYPE html>
-
 <html>
     <head>
         <title>Relay</title>
@@ -9,15 +8,14 @@
         <script type="text/javascript" src="libs/localForage.js"></script>
         <script type="text/javascript" src="config.js"></script>
         <script type="text/javascript">
-            var handlerType = "relay";
+            var handler = {"hasListeners": false, "type": "relay"};
+            localforage.config(lfConfig);
         </script>
-        <script type="text/javascript" src="scripts/handler.js"></script>
+        <script type="text/javascript" src="scripts/websocket.js"></script>
+        <script type="text/javascript" src="scripts/rtcConns.js"></script>
         <script type="text/javascript">
-            function wsMessage(data)
-            {
-                
-            }
-            function pcMessage(data, dc)
+            initWS();
+            function pcMessage(peerconn, dc, data)
             {
                 if (data.action === "userLoc")
                 {

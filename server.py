@@ -2,21 +2,16 @@ import tornado.ioloop
 import tornado.web
 import tornado.websocket
 import json
+import random
 
 from tornado.options import define, options, parse_command_line
 
 define("port", default=8888, help="run on the given port", type=int)
 
-# we gonna store clients in dictionary..
-clients = dict()
-id = 0
-storagers = dict()
-relays = dict()
-rlId = 0
-storagerCount = 0
+conns = dict()
+connId = 0
 allowedHost = "http://localhost:8383"
 storagerByStr = dict()
-      
     
 def is_json(myjson):
   try:
@@ -26,238 +21,192 @@ def is_json(myjson):
   return True  
   
 def checkToken(token):
-    if not(len(token) == 20):
+    if len(token) != 20:
         return False
     else:
-        allowed = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890!?#+*/-+|%&"
+        allowed = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890!*/-|"
         for char in token:
-            if char not in allowed: return False
+            if char not in allowed: 
+                return False
         return True
-  
-class IdHandler(tornado.web.RequestHandler):
-    @tornado.web.asynchronous
-    def get(self):
-        global id
-        id += 1
-        self.write(str(id))
-        self.set_header("Access-Control-Allow-Origin", allowedHost)
-        self.finish()
-     
 
-class relayHandler(tornado.web.RequestHandler):
-    @tornado.web.asynchronous
-    def get(self):
-        global rlId
-        print("A new relay handler client connected!")
-        rlId += 1
-        self.write(str(rlId))
-        self.set_header("Access-Control-Allow-Origin", allowedHost)
-        self.finish()
-        
+def getRelays():
+    id = 0
+    answer = dict()
+    for client in conns:
+        client = conns[client]
+        if client["type"] == "relay":
+            answer[id] = client
+            id += 1
+    return answer
 
-class storageSocket(tornado.websocket.WebSocketHandler):
+class socket(tornado.websocket.WebSocketHandler):
     def open(self, *args):
-        global storagerCount
-        print("Storage web socket opened!")
-        token = self.get_argument("Id")
-        if not(checkToken(token)):
-            self.write_message(json.dumps({"action": "close", "type": "invalidToken"}))
-            self.close()
-            return
-        storagerCount += 1
-        self.id = storagerCount
-        storagers[self.id] = {"id": self.id, "strId": token, "object": self, "status": "none", "client": "none", "reserved": "none"}
-        storagerByStr[token] = self.id
-        
-    def on_message(self, message):
-        if message == "clearStatus":
-            storager = storagers[self.id]
-            storager["status"] = "none"
-            if storager["client"] != "none":
-                storager["client"]["status"] = "none"
-                storager["client"]["conn"] = "none"
-            storager["client"] = "none"
-            return
-            
-        if storagers[self.id]["status"] == "busy-connecting":
-            storagers[self.id]["client"]["object"].write_message(message)
-        
-    def on_close(self):
-        if self.id in storagers:
-            print("Storager socket closed!")
-            if storagers[self.id]["status"] == "busy-connecting":
-                client = storagers[self.id]["client"]
-                client["status"] = "none"
-                client["conn"] = "none"
-                client["object"].write_message("storagerConnClose")
-                
-            if storagers[self.id]["status"] == "reserved":
-                clients[storagers[self.id]["reserved"]]["reserved"].remove(self.id)
-                
-            del storagerByStr[storagers[self.id]['strId']]
-            del storagers[self.id]
-            
-    def check_origin(self, origin):
-        return True
-  
-  
-class relaySocket(tornado.websocket.WebSocketHandler):
-    def open(self, *args):
-        print("Relay web socket opened!")
-        self.id = self.get_argument("Id")
-        self.stream.set_nodelay(True)
-        relays[self.id] = {"id": self.id, "object": self, "status": "none", "client":"none"}
-        
-    def on_message(self, message):
-        global unconfirmedCount
-        if message == "clearStatus":
-            relay = relays[self.id]
-            relay["status"] = "none"
-            if relay["client"] != "none":
-                relay["client"]["status"] = "none"
-                relay["client"]["conn"] = "none"
-            relay["client"] = "none"
-            return
-            
-        if is_json(message):
-            msg = json.loads(message)
-            
-        if relays[self.id]["status"] == "busy-connecting":
-            relays[self.id]["client"]["object"].write_message(message)
-        
-    def on_close(self):
-        if self.id in relays:
-            print("Relay socket closed!")
-            if relays[self.id]["status"] == "busy-connecting":
-                client = relays[self.id]["client"]
-                client["status"] = "none"
-                client["conn"] = "none"
-                client["object"].write_message("relayConnClose")
-            del relays[self.id]
-            
-    def check_origin(self, origin):
-        return True
-     
-class WebSocketHandler(tornado.websocket.WebSocketHandler):
-    def open(self, *args):
-        print("Client web socket openened!")
-        self.id = self.get_argument("Id")
-        self.stream.set_nodelay(True)
-        clients[self.id] = {"id": self.id, "object": self, "status": "none", "conn": "none", "reserved": "none"}
-
-    def on_message(self, message):
-        if message == "clearStatus":
-            client = clients[self.id]
-            client["status"] = "none"
-            if client["conn"] != "none":
-                client["conn"]["status"] = "none"
-                client["conn"]["client"] = "none"
-            client["conn"] = "none"
-            
-            return
-            
-        if clients[self.id]["status"] == "busy-connecting":
-            clients[self.id]["conn"]["object"].write_message(message)
-            return
-            
-        data = json.loads(message)
-        if data["action"] == "search":
-            for relayId in relays:
-                relay = relays[relayId]
-                if relay["status"] == "none":
-                    if data["other"]:
-                        if data["not"] == relay["id"]:
-                            continue
-                    relay["object"].write_message(json.dumps({"action": "newClient", "clientId":self.id}))
-                    relay["status"] = "busy-connecting"
-                    relay["client"] = clients[self.id]
-                    clients[self.id]["conn"] = relay
-                    self.write_message(json.dumps({"action": "connect", "relay": relay["id"]}))
-                    clients[self.id]["status"] = "busy-connecting"
-                    break
-            else:
-                if len(relays) > 0:
-                    self.write_message(json.dumps({"action":"busy"}))
-                else:
-                    self.write_message(json.dumps({"action":"no"}))
-                    
-        elif data["action"] == "storagerStatus":
-            if data["id"] in storagerByStr:
-                storager = storagers[storagerByStr[data['id']]]
-                if storager["status"] == "none" or (storager["status"] == "reserved" and storager["reserved"] == self.id):
-                    self.write_message(json.dumps({"action":"storagerStatus", "status":"available", "id":data["id"]}))
-                else:
-                    self.write_message(json.dumps({"action":"storagerStatus", "status":"busy", "id":data["id"]}))
-            else:
-                self.write_message(json.dumps({"action":"storagerStatus", "status":"offline", "id":data["id"]}))
-                
-        elif data["action"] == "connectStorager":
-            if data["id"] not in storagerByStr:
-                self.write_message(json.dumps({"action":"connStorager", "status":"no"}))
-            else:
-                storager = storagers[storagerByStr[data["id"]]]
-                if not(storager["status"] == "none") and not(storager["status"] == "reserved" and storager["reserved"] == self.id):
-                    self.write_message(json.dumps({"action":"connStorager", "status":"busy"}))
-                else:
-                    storager["object"].write_message(json.dumps({"action":"newClient", "clientId":self.id}))
-                    if storager["status"] == "reserved":
-                        clients[self.id]["reserved"].remove(data["id"])
-                        storager["reserved"] = "none"
-                        
-                    storager["status"] = "busy-connecting"
-                    storager["client"] = clients[self.id]
-                    clients[self.id]["conn"] = storager
-                    self.write_message(json.dumps({"action":"connect","status":"ok"}))
-                    clients[self.id]["status"] = "busy-connecting"
-
-                    
-        elif data["action"] == "reserveRegisterClients":
-            currCount = 0
-            foundStores = []
-            if len(storagers) == 0:
-                self.write_message(json.dumps({"action": "registerClientIds", "status": "error"}))
+        global connId
+        connType = self.get_argument("type")
+        token = ""
+        if connType == "storager":
+            token = self.get_argument("token")
+            if not checkToken(token):
+                self.write_message(json.dumps({"action": "close", "type": "invalidToken"}))
+                self.close()
                 return
-                
-            for storagerId in storagers:
-                currCount += 1
-                if currCount == 10:
-                    break
-                storager = storagers[storagerId]
-                if storager["status"] == "none":
-                    foundStores.append(storager["strId"])
-                    storager["status"] = "reserved"
-                    storager["reserved"] = self.id
+        connId += 1
+        self.id = connId
+        conns[connId] = {"id": connId, "token": token, "object": self, "sids": dict(), "type": connType, "nextSid": "none"}
+        if connType == "storager":
+            storagerByStr[token] = conns[connId]
+    def on_message(self, message):
+        if not is_json(message): return
+        msg = json.loads(message)
+        if "sid" in msg and not msg["sid"] in conns[self.id]["sids"]:
+            return
+        if msg["action"] == "new":
+            conns[self.id]["sids"][msg["id"]] = {"id": self.id, "sid": msg["id"], "status": "none", "conn": "none"}
+            return
+        if msg["action"] == "clearStatus":
+            sid = conns[self.id]["sids"][msg["id"]]
+            if sid["conn"] != "none":
+                del conns[sid["conn"]["id"]]["sids"][sid["conn"]["sid"]]
+            del conns[self.id]["sids"][msg["id"]]
+            return
+        if msg["action"] == "forward":
+            sid = conns[self.id]["sids"][msg["sid"]]
+            if sid["conn"] == "none":
+                self.write_message(json.dumps({"action": "forwardError", "sid": msg["sid"], "type": "noConn"}))
+                return
+            newSid = sid["conn"]["sid"]
+            msg["sid"] = newSid
+            msg["action"] = msg["forwardAction"]
+            msg["forwardAction"] = "forwarded"
+            conns[sid["conn"]["id"]]["object"].write_message(json.dumps(msg))
+            return
+        if msg["action"] == "reserve":
+            sid = conns[self.id]["sids"][msg["sid"]]
+            if sid["status"] != "none":
+                self.write_message(json.dumps({"action":"reserve", "type": msg["type"], "status": "error", "sid": msg["sid"]}))
+                return
+            if msg["type"] == "relay" and not "id" in msg:
+                count = 0
+                relays = getRelays()
+                checked = []
+                while 1:
+                    if count == len(relays):
+                        break
+                    id = random.randrange(len(relays))
+                    if id in checked:
+                        continue
+                    checked.append(id)
+                    relay = relays[id]
+                    relay["object"].write_message(json.dumps({"action":"new", "type": conns[self.id]["type"], "id": self.id}))
+                    relay["nextSid"] = {"conn": conns[self.id], "sid": msg["sid"]}
+                    sid["status"] = "waiting"
+                    sid["connId"] = relay["id"]
+                    return
+                if len(relays) > 0:
+                    self.write_message(json.dumps({"action":"reserve", "type": msg["type"], "status": "busy", "sid": msg["sid"]}))
+                else:
+                    self.write_message(json.dumps({"action":"reserve", "type": msg["type"], "status": "no", "sid": msg["sid"]}))
+                return
+            else:
+                if not "id" in msg:
+                    self.write_message(json.dumps({"action":"reserve", "type": msg["type"], "status": "error", "sid": msg["sid"]}))
+                    return
+                returnInfo = -1
+                if msg["type"] == "storager":
+                    if msg["id"] in storagerByStr:
+                        returnInfo = storagerByStr[msg["id"]]
+                else:
+                    for conn in conns:
+                        if conn["type"] != msg["type"]:
+                            continue
+                        if conn["id"] != msg["id"]:
+                            continue
+                        returnInfo = conn
+                if returnInfo == -1:
+                    self.write_message(json.dumps({"action":"reserve", "type": msg["type"], "status": "no", "sid": msg["sid"]}))
+                    return
+                else:
+                    returnInfo["object"].write_message(json.dumps({"action":"new", "type": conns[self.id]["type"], "id": self.id}))
+                    returnInfo["nextSid"] = {"conn": conns[self.id], "sid": msg["sid"]}
+                    sid["status"] = "waiting"
+                    return
+                    
+        if msg["action"] == "reserved":
+            sid = conns[self.id]["sids"][msg["sid"]]
+            if sid["status"] != "none":
+                # ??
+                return
+            if conns[self.id]["nextSid"] == "none":
+                self.write_message(json.dumps({"action":"connClose", "sid": msg["sid"]}))
+                return
             
-            clients[self.id]["reserved"] = foundStores
-            self.write_message(json.dumps({"action": "registerClientIds", "ids": foundStores}))
-
+            nextSid = conns[self.id]["nextSid"]
+            otherSid = nextSid["conn"]["sids"][nextSid["sid"]]
+            otherSid["status"] = "busy"
+            otherSid["conn"] = sid
+            sid["status"] = "busy"
+            sid["conn"] = otherSid
+            nextSid["conn"]["object"].write_message(json.dumps({"action":"reserve", "type": conns[self.id]["type"], "status": "ok", "sid": otherSid["sid"], "id": self.id}))
+            conns[self.id]["nextSid"] = "none"
+            return
+        if msg["action"] == "getlist":
+            list = []
+            count = 0
+            for client in conns:
+                client = conns[client]
+                if client["type"] == msg["type"]:
+                    if client["type"] == "storager":
+                        list.append(client["token"])
+                    else:
+                        list.append(client["id"])
+                    count += 1
+                    if count == msg["count"]:
+                        break
+            
+            status = "ok"
+            if count == 0:
+                status = "error"
+            self.write_message(json.dumps({"action": "getlist", "status": status, "ids": list}))
+        if msg["action"] == "status":
+            for client in conns:
+                client = conns[client]
+                if client["type"] != msg["type"]:
+                    continue
+                if msg["type"] == "storager":
+                    if msg["id"] != client["token"]:
+                        continue
+                else:
+                    if msg["id"] != client["id"]:
+                        continue
+                self.write_message(json.dumps({"action": "status", "type": msg["type"], "classId": msg["classId"], "status": "available", "id": msg["id"]}))
+                return
+            self.write_message(json.dumps({"action": "status", "type": msg["type"], "classId": msg["classId"], "status": "notfound"}))
+    
     def on_close(self):
-        if self.id in clients:
-            print("Web socket closed!")
-            if clients[self.id]["status"] == "busy-connecting":
-                conn = clients[self.id]["conn"]
-                conn["object"].write_message(json.dumps({"action":"clientConnClose", "id":self.id}))
-                conn["status"] = "none"
-                conn["client"] = "none"
+        obj = conns[self.id]
+        for sid in obj["sids"]:
+            sid = obj["sids"][sid]
+            if sid["status"] == "busy":
+                conns[sid["conn"]["id"]]["object"].write_message(json.dumps({"action":"connClose", "type": obj["type"], "id": obj["id"], "sid": sid["conn"]["sid"]}))
+            elif sid["status"] == "waiting":
+                conns[sid["connId"]]["nextSid"] = "none"
+            if sid["conn"] == "none":
+                continue
+            del conns[sid["conn"]["id"]]["sids"][sid["conn"]["sid"]]
             
-            if clients[self.id]["reserved"] != "none":
-                for storagerId in clients[self.id]["reserved"]:
-                    storager = storagers[storagerByStr[storagerId]]
-                    storager["status"] = "none"
-                    storager["reserved"] = "none"
-            
-            del clients[self.id]
-            
-            
+        if conns[self.id]["type"] == "storager":
+            del storagerByStr[conns[self.id]["token"]]
+        del conns[self.id]
+     
+  
+class WebSocketHandler(tornado.websocket.WebSocketHandler):
+
     def check_origin(self, origin):
         return True
 
 app = tornado.web.Application([
-    (r'/id', IdHandler),
-    (r'/ws', WebSocketHandler),
-    (r'/storageSocket', storageSocket),
-    (r'/relayBegin', relayHandler),
-    (r'/relaySocket', relaySocket)
+    (r'/socket', socket)
 ])
 if __name__ == '__main__':
     parse_command_line()
