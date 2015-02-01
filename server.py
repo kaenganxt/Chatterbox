@@ -199,6 +199,8 @@ class socket(tornado.websocket.WebSocketHandler):
             del storagerByStr[conns[self.id]["token"]]
         del conns[self.id]
      
+    def check_origin(self, origin):
+        return True
   
 class WebSocketHandler(tornado.websocket.WebSocketHandler):
 

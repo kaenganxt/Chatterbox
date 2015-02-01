@@ -52,6 +52,7 @@ function loginFormHandlers(showWhat)
         register.username = CryptoJS.SHA3(data.usrName) + "";
         dataCache['registerPw'] = data.usrPw;
         var afterRelayConn = function () {
+            popupWindow("Registering...", "Checking username...");
             relay.registerListener("userInfo", onUserInfo);
             relay.sendObj(register);
             loginWaitingFor = "register";
@@ -62,12 +63,12 @@ function loginFormHandlers(showWhat)
         }
         else if (hasWebSocket)
         {
-            openLoading();
+            popupWindow("Registering...", "Connecting to relay...");
             makeRelayConn(afterRelayConn);
         }
         else
         {
-            openLoading();
+            popupWindow("Registering...", "Connecting to websocket...");
             initWS(function() {
                 makeRelayConn(afterRelayConn);
             });
@@ -90,6 +91,7 @@ function loginFormHandlers(showWhat)
         login.action = "userLoc";
         login.username = CryptoJS.SHA3(usrName) + "";
         var afterRelayConn = function () {
+            popupWindow("Login...", "Getting userinfo...");
             relay.registerListener("userInfo", onUserInfo);
             relay.sendObj(login);
             loginWaitingFor = "login";
@@ -100,12 +102,12 @@ function loginFormHandlers(showWhat)
         }
         else if (hasWebSocket)
         {
-            openLoading();
+            popupWindow("Login...", "Connecting to relay...");
             makeRelayConn(afterRelayConn);
         }
         else
         {
-            openLoading();
+            popupWindow("Login...", "Connecting to websocket...");
             initWS(function() {
                 makeRelayConn(afterRelayConn);
             });
@@ -123,6 +125,7 @@ function onUserInfo(info) {
             if (data.status === "requestOther")
             {
                 relay.clearVars();
+                popupWindow("Login...", "Connecting to an other relay...");
                 makeRelayConn(function() {
                     window.relay.registerListener("userInfo", onUserInfo);
                     var loginCopy = dataCache['login'];
@@ -131,8 +134,7 @@ function onUserInfo(info) {
             }
             else if (data.status === "notKnown")
             {
-                $("#connectingPopup").fadeOut();
-                alert("You are not registered in this network! If you are, and this message is wrong, please contact us!");
+                popupWindow("You are not registered in this network! If you are, and this message is wrong, please contact us!", "", true, false);
                 loginWaitingFor = "";
             }
             else
@@ -144,22 +146,26 @@ function onUserInfo(info) {
                 dataCache['login'].hash = data.hash;
                 loginWaitingFor = "storageLogin";
                 var stConnect = function() {
+                    popupWindow("Login...", "Connecting to storager...");
                     var callback = {
                         connected: function(pc) {
+                            popupWindow("Login...", "Getting login information...");
                             loginHasStore();
                         },
                         check: function() {
                             return confirm("There's currently no storage handler with your data available. Do you want to try it again regulary?");
                         },
                         notAvailable: function() {
-                            $("#connectingWindow>div").html("No storage handler with your data available!<br />Please try again later"+closePopupWindow());
+                            popupWindow("No storage handler with your data available!<br />Please try again later", "", true, false);
                         }
                     };
                     new StoragerConnect("personal", dataCache['login'].storagers, callback).start();
                 };
                 if (typeof storagers === "undefined") {
+                    popupWindow("Login...", "Loading storager script...");
                     loadScript("scripts/storagers.js", stConnect);
                 } else if ("personal" in storagers) {
+                    popupWindow("Login...", "Getting login information...");
                     loginHasStore();
                 } else {
                     stConnect();
@@ -170,17 +176,15 @@ function onUserInfo(info) {
         {
             if (data.status !== "notKnown")
             {
-                alert("This username already exists! Please choose another one.");
+                popupWindow("This username already exists!", "Please choose another one.", true, false);
                 loginWaitingFor = "";
                 $("#registerUsername").val("");
-                $("#connectingPopup").hide();
             }
             else
             {
                 var data = {"action": "getlist", "type": "storager", "count": 10};
                 window.send(data);
-                $("#connectingWindow>h3").html("Performing Registration...");
-                $("#connectingWindow>div").html("Getting available storage handlers...");
+                popupWindow("Registering...", "Getting storager list...");
             }
         }
     }
@@ -198,11 +202,11 @@ function loginHandler(data)
         }
         else if (dataO.status === "pwWrong")
         {
-            $("#connectingWindow>*").remove();
-            $("#connectingWindow").append("<h3>The password is wrong!</h3>" + closePopupWindow());
+            popupWindow("The password is wrong", "", true, false);
         }
         else if (dataCache['login'].hash === CryptoJS.SHA3(dataO.data) + "")
         {
+            popupWindow("Login successful!", "Starting chatterbox...");
             cbStartup(dataO.data, dataCache['loginPw']);
         }
         else
@@ -228,9 +232,7 @@ function wsHandler(msg) {
         $("#connectingPopup").show();
         if (data.status === "error")
         {
-            loginWaitingFor = "";
-            $("#connectingWindow").html("");
-            $("#connectingWindow").append("<h3><span style='color:red'>Error: </span>Currently are no storage handlers available. Please try again later.</h3>" + closePopupWindow());
+            popupWindow("Currently are no storage handlers available.", "Please try again later.", true, false);
         }
         else
         {
@@ -243,19 +245,21 @@ function wsHandler(msg) {
                 },
                 done: function() {
                     if (dataCache["registerCount"] === 0) {
-
+                        popupWindow("Error: Could not connect to storager!", "Please try again later.", true, false);
                     } else {
+                        popupWindow("Registration complete!", "Starting chatterbox...");
                         localforage.setItem("lastStatus", "firstStartup");
                         cbStartup(dataCache['register'].encoded, dataCache['registerPw']);
-
                     }
                     loginWaitingFor = "";
                 }
             };
             var registerFunc = function() {
+                popupWindow("Registering...", "Connecting to storagers...");
                 new StoragerConnect("register", data.ids, callback, true).start();
             };
             if (typeof storagers === "undefined") {
+                popupWindow("Registering...", "Loading storager script...");
                 loadScript("scripts/storagers.js", registerFunc);
             } else {
                 registerFunc();
@@ -355,23 +359,31 @@ $(document).ready(function () {
         loginWaitingFor = "";
     });
 });
-function openLoading()
-{
-    $("#connectingWindow").html('<img src="imgs/load.GIF" alt="Loading..."/><h3>Getting connection...</h3><div>This may take a short while...</div>').parent().show();
-}
 function closePopupWindow()
 {
     return "<input type='button' value='Close' class='closeLoadingPopup' style='float:right;margin-right:5em;'/>";
 }
+function popupWindow(header, text, closeButton, loadingWheel) {
+    if (typeof closeButton === "undefined" || closeButton === null) closeButton = false;
+    if (typeof loadingWheel === "undefined" || loadingWheel === null) loadingWheel = true;
+    $("#connectingWindow").html("");
+    if (loadingWheel) {
+        $("#connectingWindow").html('<img src="imgs/load.GIF" alt="Loading..."/>');
+    }
+    $("#connectingWindow").append("<h3>"+header+"</h3><div>"+text+"</div>");
+    if (closeButton) {
+        $("#connectingWindow").append(closePopupWindow());
+    }
+    $("#connectingPopup").show();
+}
 
 function cbStartup(data, pw)
 {
-    $("#connectingWindow>*").html("");
-    $("#connectingWindow").append("<h2>Startup...</h2><div>Login successfull! Now starting chatterbox...</div>");
     try {
         dataCache['decoded'] = CryptoJS.AES.decrypt(data, pw).toString(CryptoJS.enc.Utf8);
     } catch(ex) {
         console.error("Data could not be decoded!");
+        popupWindow("Data decoding failed!", "Please try again or contact an administrator.", true, false);
         return;
     }
     loadScript("scripts/main.js");

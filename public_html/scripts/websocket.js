@@ -11,7 +11,9 @@ function initWS(callback)
         return;
     }
     if (connecting) {
-        wsCallback = function() {wsCallback(); callback();};
+        if (typeof callback === "function") {
+            wsCallback = function() {wsCallback(); callback();};
+        }
         return;
     }
     wsCallback = callback;
@@ -20,7 +22,7 @@ function initWS(callback)
         ws = null;
         hasWebSocket = false;
     }
-    var connecting = true;
+    connecting = true;
     var token = wsToken;
     var tokenStr = token === null ? "" : "&token="+token;
     ws = new WebSocket("ws://" + wsHost + ":" + wsPort + "/socket?type="+handler["type"] + tokenStr);
@@ -41,7 +43,7 @@ function initWS(callback)
     ws.onclose = function () {
         connecting = false;
         hasWebSocket = false;
-        setTimeout(initWS, 1000);
+        setTimeout(function() {initWS(wsCallback);}, 1000);
     };
 }
 function send(msg)
