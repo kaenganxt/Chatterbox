@@ -58,6 +58,8 @@
                     var dataHash = data.hash;
                     localforage.setItem("user_" + userHash + "_stores", storagers);
                     localforage.setItem("user_" + userHash + "_hash", dataHash);
+                    var ts = Math.round(new Date().getTime() / 1000);
+                    localforage.setItem("user_" + userHash + "_relaytime", ts);
                     //TODO: Distribute the data over the network
                 }
                 else if (data.action === "addStore")
@@ -68,10 +70,34 @@
                         var stores = new Array();
                         if (data)
                         {
-                            stores = JSON.parse(data);
+                            stores = data;
                         }
                         stores.push(storager);
-                        localforage.setItem("user_" + userHash + "_stores", JSON.stringify(stores));
+                        localforage.setItem("user_" + userHash + "_stores", stores);
+                        var ts = Math.round(new Date().getTime() / 1000);
+                        localforage.setItem("user_" + userHash + "_relaytime", ts);
+                    });
+                } else if (data.action === "updateHash") {
+                    var userHash = data.user;
+                    var dataHash = data.hash;
+                    localforage.setItem("user_" + userHash + "_hash", dataHash);
+                    var ts = Math.round(new Date().getTime() / 1000);
+                    localforage.setItem("user_" + userHash + "_relaytime", ts);
+                } else if (data.action === "stores") {
+                    var count = data.userlist.length;
+                    var found = 0;
+                    var answer = new Object();
+                    $.each(data.userlist, function() {
+                        var user = this;
+                        localforage.getItem("user_" + this + "_stores").then(function(stores) {
+                            if (stores !== null) {
+                                answer[user] = stores;
+                            }
+                            found++;
+                            if (found === count) {
+                                dc.send(JSON.stringify({"action": "stores", "users": answer}));
+                            }
+                        });
                     });
                 }
             }

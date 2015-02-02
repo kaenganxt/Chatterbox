@@ -79,6 +79,7 @@ function StoragerConnect(name, ids, callback, makeAllArg) {
         peerConn = new RTCConnection();
         storagerConns[id] = peerConn;
         peerConn.init("storager", id, function() {
+            checked++;
             if (makeAll) {
                 callback.haveOne(id);
                 if (checked === ids.length) {
@@ -92,6 +93,7 @@ function StoragerConnect(name, ids, callback, makeAllArg) {
         }, thiss.error);
     };
     this.error = function() {
+        checked++;
         if (!makeAll) {
             thiss.start();
         }
@@ -101,7 +103,6 @@ function StoragerConnect(name, ids, callback, makeAllArg) {
             if (state === "checking" || state === "checkingRegular") {
                 var data = JSON.parse(msg);
                 if (data.action === "status" && data.type === "storager" && data.classId === id) {
-                    checked++;
                     if (data.status === "available") {
                         if (!makeAll) {
                             state = "connecting";
@@ -110,6 +111,7 @@ function StoragerConnect(name, ids, callback, makeAllArg) {
                         thiss.connect(data.id);
                         return;
                     }
+                    checked++;
                     if (checked === ids.length) {
                         if (makeAll) {
                             callback.done();

@@ -331,7 +331,6 @@ function registerToStorager(id)
 }
 
 var hasRelayConn = false;
-var hasWebSocket = false;
 var relay;
 
 function makeRelayConn(callback) {

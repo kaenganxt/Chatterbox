@@ -166,9 +166,9 @@ function RTCConnection(connectId) {
             rtc.regDCListeners(dc.channel);
             dcCount++;
         };
-        pc.oniceconnectionstatechange = function() {
-            iceState = rtc.getPc().iceConnectionState;
-            if (iceState === "failed") {
+        pc.oniceconnectionstatechange = function(ev) {
+            iceState = ev.target.iceConnectionState;
+            if (iceState === "failed" && rtc.getPc() !== null) {
                 rtc.clearVars();
                 connAbort();
             }

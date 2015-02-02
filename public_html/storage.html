@@ -14,7 +14,9 @@
         </script>
         <script type="text/javascript" src="scripts/websocket.js"></script>
         <script type="text/javascript" src="scripts/rtcConns.js"></script>
+        <script type="text/javascript" src="scripts/storagers.js"></script>
         <script type="text/javascript">
+            var relay;
             localforage.getItem("storage_id").then(function(token) {
                 if (!token)
                 {
@@ -22,8 +24,30 @@
                     localforage.setItem("storage_id", token);
                 }
                 wsToken = token;
-                initWS();
+                initWS(storagerStartup);
             });
+            function storagerUpdateRequest(peerConn, user) {
+                peerConn.sendObj({"action": "lastUpdate", "user": user});
+            };
+            function storagerStartup() {
+                relay = new RTCConnection();
+                relay.init("relay", -1, function() {
+                    localforage.keys(function(err, keys) {
+                        var users = new Array();
+                        $.each(keys, function() {
+                            if (this.substr(0,4) === "user" && this.substr(134) === "data") {
+                                var userHash = this.substr(5, 128);
+                                users.push(userHash);
+                            }
+                        });
+                        relay.sendObj({"action": "stores", "userlist": users});
+                    });
+                }, relayConnFail);
+            }
+            function relayConnFail() {
+                relay.clearVars();
+                storagerStartup();
+            }
             function generateStr() {
                 var chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890!*/-|";
                 var string = "";
@@ -78,6 +102,67 @@
                     obj.pwHash = pw;
                     obj.enc = enc;
                     localforage.setItem("user_" + user + "_data", obj);
+                    var ts = Math.round(new Date().getTime() / 1000);
+                    localforage.setItem("user_" + user + "_timestamp", ts);
+                } else if (data.action === "lastUpdate") {
+                    var userHash = data.user;
+                    localforage.getItem("user_" + userHash + "_timestamp").then(function(timestamp) {
+                        if (timestamp === null) {
+                            return;
+                        }
+                        datachannel.send(JSON.stringify({"action": "lastUpdateAnsw", "user": userHash, "time": timestamp}));
+                    });
+                } else if (data.action === "userUpdate") {
+                    var userHash = data.user;
+                    localforage.getItem("user_" + userHash + "_timestamp").then(function(timestamp) {
+                        if (timestamp === null) {
+                            return;
+                        }
+                        localforage.getItem("user_" + userHash + "_data").then(function(userdata) {
+                            if (userdata === null) {
+                                return;
+                            }
+                            peerconn.sendObj({"action": "userUpdateAnsw", "user": userHash, "time": timestamp, "data": userdata});
+                        });
+                    });
+                } else if (data.action === "lastUpdateAnsw") {
+                    localforage.getItem("user_" + data.user + "_timestamp").then(function(time) {
+                        if (time < data.time) {
+                            peerconn.sendObj({"action": "userUpdate", "user": data.user});
+                        }
+                    });
+                } else if (data.action === "userUpdateAnsw") {
+                    localforage.getItem("user_" + data.user + "_data").then(function(userdata) {
+                        if (userdata === null) return;
+                        localforage.setItem("user_" + data.user + "_data", data.data);
+                        localforage.setItem("user_" + data.user + "_timestamp", data.time);
+                    });
+                } else if (data.action === "stores") {
+                    $.each(data.users, function(user, stores) {
+                        var done = false;
+                        $.each(stores, function() {
+                            if (this + "" === wsToken) {
+                                var id = stores.indexOf(this + "");
+                                if (id > -1) {
+                                    stores.splice(id, 1);
+                                }
+                                return;
+                            }
+                            if (done) return;
+                            if ((this + "") in storagerConns) {
+                                storagerUpdateRequest(storagerConns[this + ""], user);
+                                done = true;
+                            }
+                        });
+                        if (done) return;
+                        var callback = {
+                            connected: function(conn) {
+                                storagerUpdateRequest(conn, user);
+                            },
+                            notAvailable: function() {}
+                        };
+                        new StoragerConnect("storeUpdate_" + user, stores, callback).start();
+                    });
                 }
             }
         </script>

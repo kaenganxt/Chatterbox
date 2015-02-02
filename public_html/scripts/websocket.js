@@ -3,6 +3,8 @@ var wsHandlers = new Object();
 var wsToken;
 var connecting = false;
 var wsCallback;
+var hasWebSocket = false;
+var wsQueue = new Array();
 
 function initWS(callback)
 {
@@ -24,15 +26,20 @@ function initWS(callback)
     }
     connecting = true;
     var token = wsToken;
-    var tokenStr = token === null ? "" : "&token="+token;
+    var tokenStr = (typeof token === "undefined" || token === null) ? "" : "&token="+token;
     ws = new WebSocket("ws://" + wsHost + ":" + wsPort + "/socket?type="+handler["type"] + tokenStr);
     ws.onopen = function () {
         console.log("WS Connected!");
         hasWebSocket = true;
         connecting = false;
+        $.each(wsQueue, function() {
+            send(this);
+        });
+        wsQueue = new Array();
         if (typeof callback === "function")
         {
             wsCallback();
+            wsCallback = null;
         }
     };
     ws.onmessage = function (evt) {
@@ -48,8 +55,9 @@ function initWS(callback)
 }
 function send(msg)
 {
-    if (ws !== null)
-    {
-        ws.send(JSON.stringify(msg));
+    if (hasWebSocket === false || ws === null) {
+        wsQueue.push(msg);
+        return;
     }
+    ws.send(JSON.stringify(msg));
 }
