@@ -89,13 +89,39 @@
                     var answer = new Object();
                     $.each(data.userlist, function() {
                         var user = this;
-                        localforage.getItem("user_" + this + "_stores").then(function(stores) {
+                        localforage.getItem("user_" + user + "_stores").then(function(stores) {
                             if (stores !== null) {
                                 answer[user] = stores;
                             }
                             found++;
                             if (found === count) {
                                 dc.send(JSON.stringify({"action": "stores", "users": answer}));
+                            }
+                        });
+                    });
+                } else if (data.action === "usercount") {
+                    localforage.keys(function(err, keys) {
+                        var count = 0;
+                        $.each(keys, function() {
+                            if (this.substr(0,4) === "user" && this.substr(134) === "stores") {
+                                count++;
+                            }
+                        });
+                        peerconn.sendObj({"action": "usercount", "count": count, "type": data.type});
+                    });
+                } else if (data.action === "newclient") {
+                    localforage.keys(function(err, keys) {
+                        var foundOne = false;
+                        $.each(keys, function() {
+                            var key = this;
+                            if (key.substr(0,4) === "user" && key.substr(134) === "stores") {
+                                localforage.getItem(key + "").then(function(stores) {
+                                    if (foundOne) return;
+                                    if ($.inArray(data.me, stores) !== -1) return;
+                                    if (stores.length >= 20) return;
+                                    foundOne = true;
+                                    peerconn.sendObj({"action": "newclient", "user": key.substr(5, 128), "stores": stores});
+                                });
                             }
                         });
                     });

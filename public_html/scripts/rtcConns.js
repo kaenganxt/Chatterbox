@@ -20,6 +20,8 @@ function RTCConnection(connectId) {
     var id;
     var connId;
     var beginner;
+    var connecting = false;
+    var sendQueue = new Array();
     if (typeof connectId === "undefined" || connectId === null) {
         connId = sids;
         sids++;
@@ -38,6 +40,7 @@ function RTCConnection(connectId) {
             console.error("RTCConnection.start() called with unknown type");
             return;
         }
+        connecting = true;
         beginner = false;
         type = ltype;
         id = lid;
@@ -68,6 +71,7 @@ function RTCConnection(connectId) {
             console.warn("RTCConnection constructed without specifying a callback. This is not recommended as you can't get sure the connection is already complete!");
             callback = function() {};
         }
+        connecting = true;
         beginner = true;
         type = ltype;
         id = lid;
@@ -91,36 +95,20 @@ function RTCConnection(connectId) {
     };
     this.wsHandler = function() {
         window.wsHandlers["rtc-" + type + "-" + connId] = function(msg) {
-            if (rtc.getPc() === null) return;
             if (!hasConn) {
                 var data = JSON.parse(msg);
-                if (data.action === "answerDesc" && data.sid === connId) {
-                    rtc.getPc().setRemoteDescription(new SessionDescription(data.answer), function() {}, rtc.offerFail);
-                } else if (data.action === "candidate" && data.sid === connId) {
-                    if (typeof data.candidate === "undefined" || data.candidate === null) {
-                        return;
-                    }
-                    rtc.getPc().addIceCandidate(new IceCandidate(data.candidate), function() {}, function() {});
-                } else if (data.action === "description") {
-                    rtc.getPc().setRemoteDescription(new SessionDescription(data.offer), function() {
-                        rtc.getPc().createAnswer(function(answer) {
-                           rtc.getPc().setLocalDescription(answer, function() {
-                                var answerobj = new Object();
-                                answerobj.forwardAction = "answerDesc";
-                                answerobj.action = "forward";
-                                answerobj.sid = connId;
-                                answerobj.answer = answer;
-                                window.send(answerobj);
-                            }, rtc.offerFail);
-                        }, rtc.offerFail);
-                    }, rtc.offerFail);
-                } else if (data.action === "reserve" && data.sid === connId) {
+                if (data.action === "reserve" && data.sid === connId) {
                     if (data.type === "relay") {
                         if (data.status === "no") {
-                            $("#connectingWindow>*").hide();
-                            $("#connectingWindow").append("<h3 style='color:red;'>Error: No services available!</h3><div>Try again later!</div>" + closePopupWindow());
+                            if (type === "client") { //Temporary solution because of exceptions (TODO)
+                                $("#connectingWindow>*").hide();
+                                $("#connectingWindow").append("<h3 style='color:red;'>Error: No services available!</h3><div>Try again later!</div>" + closePopupWindow());
+                            }
+                            rtc.clearVars();
                         } else if (data.status === "busy") {
-                            $("#connectingWindow>div").html("Please wait, the system is busy at the moment...");
+                            if (type === "client") {
+                                $("#connectingWindow>div").html("Please wait, the system is busy at the moment...");
+                            }
                             var data = {"action": "reserve", "sid": connId, "type": "relay"};
                             setTimeout(function () {
                                 window.send(data);
@@ -135,6 +123,7 @@ function RTCConnection(connectId) {
                         }
                     } else {
                         if (data.status === "no") {
+                            connecting = false;
                             connAbort();
                         } else if (data.status === "ok") {
                             rtc.buildPeerConn();
@@ -143,6 +132,28 @@ function RTCConnection(connectId) {
                             connAbort();
                         }
                     }
+                }
+                if (typeof rtc.getPc() === "undefined" || rtc.getPc() === null) return;
+                if (data.action === "answerDesc" && data.sid === connId) {
+                    rtc.getPc().setRemoteDescription(new SessionDescription(data.answer), function() {}, rtc.offerFail);
+                } else if (data.action === "candidate" && data.sid === connId) {
+                    if (typeof data.candidate === "undefined" || data.candidate === null) {
+                        return;
+                    }
+                    rtc.getPc().addIceCandidate(new IceCandidate(data.candidate), function() {}, function() {});
+                } else if (data.sid === connId && data.action === "description") {
+                    rtc.getPc().setRemoteDescription(new SessionDescription(data.offer), function() {
+                        rtc.getPc().createAnswer(function(answer) {
+                           rtc.getPc().setLocalDescription(answer, function() {
+                                var answerobj = new Object();
+                                answerobj.forwardAction = "answerDesc";
+                                answerobj.action = "forward";
+                                answerobj.sid = connId;
+                                answerobj.answer = answer;
+                                window.send(answerobj);
+                            }, rtc.offerFail);
+                        }, rtc.offerFail);
+                    }, rtc.offerFail);
                 } else if (data.action === "connClose" && data.sid === connId) {
                     rtc.clearVars();
                     connAbort();
@@ -208,6 +219,7 @@ function RTCConnection(connectId) {
         dcs = new Array();
         dcCount = 0;
         hasConn = false;
+        connecting = false;
     };
     this.close = function() {
         if (!hasConn) return;
@@ -228,10 +240,16 @@ function RTCConnection(connectId) {
                     case "opened":
                         dc.send("hello");
                         window.ws.send("clearStatus");
+                        connecting = false;
                     case "hello":
                         hasConn = true;
                         console.log("New rtc connection is ready!");
+                        connecting = false;
                         afterConnect();
+                        $.each(sendQueue, function() {
+                            rtc.send(this);
+                        });
+                        sendQueue = new Array();
                         return;
                 }
             }
@@ -251,7 +269,11 @@ function RTCConnection(connectId) {
     };
     this.send = function(msg, dcId) {
         if (!hasConn) {
-            console.warn("Tried to send message without having connection!");
+            if (connecting) {
+                sendQueue.push(msg);
+            } else {
+                console.error("Tried to send message without having connection!");
+            }
             return;
         }
         if (typeof dcId === "undefined" || dcId === null) {
@@ -280,12 +302,8 @@ wsHandlers["rtcConns"] = function(msg) {
         if (typeof conns[data.type][data.id] !== "undefined") {
             return;
         }
-        var obj = new Object();
-        obj.id = data.id;
-        obj.type = data.type;
         var sid = sids;
-        obj.obj = new RTCConnection(sid);
-        obj.obj.start(data.id, data.type, sid);
+        new RTCConnection(sid).start(data.id, data.type, sid);
         sids++;
         var send1 = new Object();
         send1.action = "new";

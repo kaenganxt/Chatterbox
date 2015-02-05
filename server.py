@@ -130,6 +130,7 @@ class socket(tornado.websocket.WebSocketHandler):
                     returnInfo["object"].write_message(json.dumps({"action":"new", "type": conns[self.id]["type"], "id": self.id}))
                     returnInfo["nextSid"] = {"conn": conns[self.id], "sid": msg["sid"]}
                     sid["status"] = "waiting"
+                    sid["connId"] = returnInfo["id"]
                     return
                     
         if msg["action"] == "reserved":
@@ -188,7 +189,10 @@ class socket(tornado.websocket.WebSocketHandler):
         for sid in obj["sids"]:
             sid = obj["sids"][sid]
             if sid["status"] == "busy":
-                conns[sid["conn"]["id"]]["object"].write_message(json.dumps({"action":"connClose", "type": obj["type"], "id": obj["id"], "sid": sid["conn"]["sid"]}))
+                try:
+                    conns[sid["conn"]["id"]]["object"].write_message(json.dumps({"action":"connClose", "type": obj["type"], "id": obj["id"], "sid": sid["conn"]["sid"]}))
+                except:
+                    pass # Find solution why these errors occur
             elif sid["status"] == "waiting":
                 conns[sid["connId"]]["nextSid"] = "none"
             if sid["conn"] == "none":
@@ -202,11 +206,6 @@ class socket(tornado.websocket.WebSocketHandler):
     def check_origin(self, origin):
         return True
   
-class WebSocketHandler(tornado.websocket.WebSocketHandler):
-
-    def check_origin(self, origin):
-        return True
-
 app = tornado.web.Application([
     (r'/socket', socket)
 ])

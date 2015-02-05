@@ -90,9 +90,10 @@ function StoragerConnect(name, ids, callback, makeAllArg) {
             }
             callback.connected(peerConn);
             state = "done";
-        }, thiss.error);
+        }, function() { thiss.error(id); });
     };
-    this.error = function() {
+    this.error = function(storeId) {
+        delete storagerConns[storeId];
         checked++;
         if (!makeAll) {
             thiss.start();
@@ -122,7 +123,7 @@ function StoragerConnect(name, ids, callback, makeAllArg) {
                             setTimeout(thiss.start, 1500);
                             return;
                         }
-                        if (callback.check()) {
+                        if (typeof callback.check !== "function" || callback.check()) {
                             state = "checkingRegular";
                             setTimeout(thiss.start, 1500);
                         }

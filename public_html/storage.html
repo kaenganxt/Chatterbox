@@ -42,6 +42,7 @@
                         });
                         relay.sendObj({"action": "stores", "userlist": users});
                     });
+                    relay.sendObj({"action": "usercount", "type": 1});
                 }, relayConnFail);
             }
             function relayConnFail() {
@@ -163,6 +164,43 @@
                         };
                         new StoragerConnect("storeUpdate_" + user, stores, callback).start();
                     });
+                } else if (data.action === "usercount") {
+                    var totalCount = data.count;
+                    var ownCount = 0;
+                    localforage.keys(function(err, keys) {
+                        $.each(keys, function() {
+                            if (this.substr(0,4) === "user" && this.substr(134) === "data") {
+                                ownCount++;
+                            }
+                        });
+                        if (totalCount < 10 && totalCount > ownCount) {
+                            relay.sendObj({"action": "newclient", "me": wsToken});
+                        } else if (data.type === 1 && (ownCount < 10 && totalCount > ownCount) || (ownCount < totalCount / 10)) {
+                            relay.sendObj({"action": "newclient", "me": wsToken});
+                        }
+                    });
+                } else if (data.action === "newclient") {
+                    var user = data.user;
+                    var stores = data.stores;
+                    var callback = {
+                        connected: function(conn) {
+                            conn.sendObj({"action": "wantnewclient", "user": user});
+                        },
+                        notAvailable: function() {}
+                    };
+                    new StoragerConnect("newclient_" + user, stores, callback).start();
+                } else if (data.action === "wantnewclient") {
+                    localforage.getItem("user_" + data.user + "_data").then(function(usrdata) {
+                        if (!usrdata) return;
+                        localforage.getItem("user_" + data.user + "_timestamp").then(function(time) {
+                            peerconn.sendObj({"action": "havenewclient", "user": data.user, "data": usrdata, "timestamp": time});
+                        });
+                    });
+                } else if (data.action === "havenewclient") {
+                    localforage.setItem("user_" + data.user + "_data", data.data);
+                    localforage.setItem("user_" + data.user + "_timestamp", data.timestamp);
+                    relay.sendObj({"action": "addStore", "user": data.user, "storager": wsToken});
+                    relay.sendObj({"action": "usercount", "type": 2});
                 }
             }
         </script>
