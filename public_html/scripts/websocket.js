@@ -5,7 +5,22 @@ var connecting = false;
 var wsCallback;
 var hasWebSocket = false;
 var wsQueue = new Array();
+var wsId;
 
+function wsConnDone() {
+    console.log("WS Connected!");
+    hasWebSocket = true;
+    connecting = false;
+    $.each(wsQueue, function() {
+        send(this);
+    });
+    wsQueue = new Array();
+    if (typeof wsCallback === "function")
+    {
+        wsCallback();
+        wsCallback = null;
+    }
+}
 function initWS(callback)
 {
     if (typeof canConnect !== "undefined" && canConnect === false) {
@@ -29,20 +44,22 @@ function initWS(callback)
     var tokenStr = (typeof token === "undefined" || token === null) ? "" : "&token="+token;
     ws = new WebSocket("ws://" + wsHost + ":" + wsPort + "/socket?type="+handler["type"] + tokenStr);
     ws.onopen = function () {
-        console.log("WS Connected!");
-        hasWebSocket = true;
-        connecting = false;
-        $.each(wsQueue, function() {
-            send(this);
-        });
-        wsQueue = new Array();
-        if (typeof callback === "function")
-        {
-            wsCallback();
-            wsCallback = null;
+        if (handler["type"] !== "storager") {
+            ws.send(JSON.stringify({"action": "userid"}));
+            return;
         }
+        wsId = -1;
+        wsConnDone();
     };
     ws.onmessage = function (evt) {
+        try {
+            var data = JSON.parse(evt.data);
+            if (data.action === "userid") {
+                wsId = data.id;
+                wsConnDone();
+                return;
+            }
+        } catch (e) {}
         $.each(wsHandlers, function () {
             this(evt.data);
         });

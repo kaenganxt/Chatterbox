@@ -97,16 +97,16 @@ class socket(tornado.websocket.WebSocketHandler):
                     if id in checked:
                         continue
                     checked.append(id)
+                    count += 1
                     relay = relays[id]
+                    if relay["id"] in msg["not"]:
+                        continue
                     relay["object"].write_message(json.dumps({"action":"new", "type": conns[self.id]["type"], "id": self.id}))
                     relay["nextSid"] = {"conn": conns[self.id], "sid": msg["sid"]}
                     sid["status"] = "waiting"
                     sid["connId"] = relay["id"]
                     return
-                if len(relays) > 0:
-                    self.write_message(json.dumps({"action":"reserve", "type": msg["type"], "status": "busy", "sid": msg["sid"]}))
-                else:
-                    self.write_message(json.dumps({"action":"reserve", "type": msg["type"], "status": "no", "sid": msg["sid"]}))
+                self.write_message(json.dumps({"action":"reserve", "type": msg["type"], "status": "no", "sid": msg["sid"]}))
                 return
             else:
                 if not "id" in msg:
@@ -183,6 +183,8 @@ class socket(tornado.websocket.WebSocketHandler):
                 self.write_message(json.dumps({"action": "status", "type": msg["type"], "classId": msg["classId"], "status": "available", "id": msg["id"]}))
                 return
             self.write_message(json.dumps({"action": "status", "type": msg["type"], "classId": msg["classId"], "status": "notfound"}))
+        if msg["action"] == "userid":
+            self.write_message(json.dumps({"action": "userid", "id": self.id}))
     
     def on_close(self):
         obj = conns[self.id]

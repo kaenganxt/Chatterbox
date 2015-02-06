@@ -51,9 +51,9 @@ function RTCConnection(connectId) {
         rtc.wsHandler();
         conns[type][id] = rtc;
     };
-    this.init = function(ltype, lid, callback, failCallback) {
+    this.init = function(ltype, lid, callback, failCallback, idBlacklist) {
         if (!hasWebSocket) {
-            initWS(function() { rtc.init(ltype, lid, callback, failCallback); });
+            initWS(function() { rtc.init(ltype, lid, callback, failCallback, idBlacklist); });
             return;
         }
         if (ltype === null || !(ltype === "relay" || ltype === "storager" || ltype === "client")) {
@@ -67,7 +67,7 @@ function RTCConnection(connectId) {
             }
             id = -1;
         }
-        if (callback === null) {
+        if (typeof callback !== "function") {
             console.warn("RTCConnection constructed without specifying a callback. This is not recommended as you can't get sure the connection is already complete!");
             callback = function() {};
         }
@@ -76,15 +76,18 @@ function RTCConnection(connectId) {
         type = ltype;
         id = lid;
         afterConnect = callback;
-        if (failCallback === null) {
+        if (typeof failCallback !== "function") {
             failCallback = function() {};
+        }
+        if (typeof idBlacklist !== "object") {
+            idBlacklist = [];
         }
         connAbort = failCallback;
         rtc.wsHandler();
         var newSid = {"action": "new", "id": connId};
         window.send(newSid);
         if (id === -1) {
-            var obj = {"action": "reserve", "type": "relay", "sid": connId};
+            var obj = {"action": "reserve", "type": "relay", "sid": connId, "not": idBlacklist};
             window.send(obj);
             return;
         } else {

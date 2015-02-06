@@ -14,7 +14,21 @@
         <script type="text/javascript" src="scripts/websocket.js"></script>
         <script type="text/javascript" src="scripts/rtcConns.js"></script>
         <script type="text/javascript">
-            initWS();
+            initWS(setupRelay);
+            function setupRelay() {
+                var otherrelay = new RTCConnection();
+                otherrelay.init("relay", -1, function() {
+                    localforage.keys(function(err, keys) {
+                        $.each(keys, function() {
+                            var key = this;
+                            if (key.substr(0,4) === "user" && (key.substr(134) === "stores" || key.substr(134) === "hash" || key.substr(134) === "relaytime")) {
+                                localforage.removeItem(key);
+                            }
+                        });
+                        otherrelay.sendObj({"action": "relaydata"});
+                    });
+                }, function() {}, [wsId]);
+            }
             function pcMessage(peerconn, dc, data)
             {
                 if (data.action === "userLoc")
@@ -124,6 +138,25 @@
                                 });
                             }
                         });
+                    });
+                } else if (data.action === "relaydata") {
+                    var users = new Object();
+                    localforage.iterate(function(value, key) {
+                        if (key.substr(0,4) === "user" && (key.substr(134) === "stores" || key.substr(134) === "hash" || key.substr(134) === "relaytime")) {
+                            var user = key.substr(5, 128);
+                            if (typeof users[user] === "undefined") {
+                                users[user] = new Object();
+                            }
+                            users[user][key.substr(134)] = value;
+                        }
+                    }).then(function() {
+                        peerconn.sendObj({"action": "currentrelaydata", "users": users});
+                    });
+                } else if (data.action === "currentrelaydata") {
+                    $.each(data.users, function(key, value) {
+                        localforage.setItem("user_" + key + "_stores", value["stores"]);
+                        localforage.setItem("user_" + key + "_hash", value["hash"]);
+                        localforage.setItem("user_" + key + "_relaytime", value["relaytime"]);
                     });
                 }
             }
