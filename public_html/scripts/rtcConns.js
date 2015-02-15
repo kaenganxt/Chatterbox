@@ -101,39 +101,16 @@ function RTCConnection(connectId) {
             if (!hasConn) {
                 var data = JSON.parse(msg);
                 if (data.action === "reserve" && data.sid === connId) {
-                    if (data.type === "relay") {
-                        if (data.status === "no") {
-                            if (type === "client") { //Temporary solution because of exceptions (TODO)
-                                $("#connectingWindow>*").hide();
-                                $("#connectingWindow").append("<h3 style='color:red;'>Error: No services available!</h3><div>Try again later!</div>" + closePopupWindow());
-                            }
-                            rtc.clearVars();
-                        } else if (data.status === "busy") {
-                            if (type === "client") {
-                                $("#connectingWindow>div").html("Please wait, the system is busy at the moment...");
-                            }
-                            var data = {"action": "reserve", "sid": connId, "type": "relay"};
-                            setTimeout(function () {
-                                window.send(data);
-                            }, 500);
-                        } else if (data.status === "ok") {
+                    if (data.status === "no" || data.status === "error") {
+                        connecting = false;
+                        connAbort();
+                        rtc.clearVars();
+                    } else if (data.status === "ok") {
+                        if (id === -1) {
                             id = data.id;
                             conns["relay"][data.id] = rtc;
-                            rtc.buildPeerConn();
-                        } else if (data.status === "error") {
-                            rtc.clearVars();
-                            connAbort();
                         }
-                    } else {
-                        if (data.status === "no") {
-                            connecting = false;
-                            connAbort();
-                        } else if (data.status === "ok") {
-                            rtc.buildPeerConn();
-                        } else if (data.status === "error") {
-                            rtc.clearVars();
-                            connAbort();
-                        }
+                        rtc.buildPeerConn();
                     }
                 }
                 if (typeof rtc.getPc() === "undefined" || rtc.getPc() === null) return;
@@ -318,3 +295,54 @@ wsHandlers["rtcConns"] = function(msg) {
         window.send(send);
     }
 };
+
+function spreadRelayMsg(obj, ids) {
+    if (ids.length <= 5) {
+        obj.spread = [];
+        $.each(ids, function() {
+            var id = this;
+            if (id in conns["relay"]) {
+                conns["relay"][id].sendObj(obj);
+            } else {
+                var aRelay = new RTCConnection();
+                aRelay.init("relay", id, function() {
+                    aRelay.sendObj(obj);
+                });
+            }
+        });
+        return;
+    }
+    var connectTo = new Array();
+    var spreadData = new Array();
+    var eachCount = (ids.length - 5) / 5;
+    var count = (eachCount > Math.floor(eachCount)) ? Math.floor(eachCount) + 1 : eachCount;
+    if (count < 1) count = 1;
+    $.each(ids, function(key1, value) {
+        if (connectTo.length < 5) {
+            connectTo.push(value);
+            spreadData[connectTo.indexOf(value)] = new Array();
+            return;
+        }
+        var found = false;
+        $.each(connectTo, function(key) {
+            if (found) return;
+            if (spreadData[key].length >= count) return;
+            spreadData[key].push(value);
+            found = true;
+        });
+        if (!found) {
+            spreadData[0].push(value);
+        }
+    });
+    $.each(connectTo, function(key, value) {
+        obj.spread = spreadData[key];
+        if (value in conns["relay"]) {
+            conns["relay"][value].sendObj(obj);
+        } else {
+            var relay = new RTCConnection();
+            relay.init("relay", value, function() {
+                relay.sendObj(obj);
+            });
+        }
+    });
+}

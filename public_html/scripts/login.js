@@ -74,6 +74,7 @@ function loginFormHandlers(showWhat)
             });
         }
         dataCache['register'] = newData;
+        dataCache['user'] = register.username;
     });
     $("#loginForm").bind("submit", function (e) {
         e.preventDefault();
@@ -114,6 +115,7 @@ function loginFormHandlers(showWhat)
         }
         dataCache['loginPw'] = usrPw;
         dataCache['login'] = login;
+        dataCache['user'] = login.username;
     });
 }
 function onUserInfo(info) {
@@ -287,7 +289,7 @@ function registerToRelay(id)
     storagers.push(id);
     obj.storagers = storagers;
     obj.hash = CryptoJS.SHA3(dataCache['register'].encoded) + "";
-    relay.sendObj(obj);
+    spreadRelay(obj);
     registeredToRelay = true;
 }
 function updateRegisterRelay(id)
@@ -296,38 +298,38 @@ function updateRegisterRelay(id)
     obj.action = "addStore";
     obj.user = dataCache['register'].usrName;
     obj.storager = id;
-    relay.sendObj(obj);
+    spreadRelay(obj);
 }
 function registerToStorager(id)
 {
     var data = dataCache['register'];
     storagerConns[id].sendObj(data);
-    if (!registeredToRelay)
-    {
-        if (hasRelayConn)
-        {
-            registerToRelay(id);
-        }
-        else
-        {
-            makeRelayConn(function () {
-                registerToRelay(id);
-            });
-        }
+    if (!registeredToRelay) {
+        registerToRelay(id);
+    } else {
+        updateRegisterRelay(id);
     }
-    else
-    {
-        if (hasRelayConn)
-        {
-            updateRegisterRelay(id);
-        }
-        else
-        {
-            makeRelayConn(function () {
-                updateRegisterRelay(id);
-            });
-        }
+}
+
+function spreadRelay(msgObj) {
+    if (typeof dataCache["spreadCount"] === "undefined") {
+        dataCache["spreadCount"] = 1;
+    } else {
+        dataCache["spreadCount"]++;
     }
+    dataCache["relaySpreadMsg" + dataCache["spreadCount"]] = msgObj;
+    send({"action": "getlist", "type": "relay", "spId": dataCache["spreadCount"]});
+    wsHandlers["relaySpread"] = function(msg) {
+        msg = JSON.parse(msg);
+        if (typeof msg.spId === "undefined" || msg.spId === 0) return;
+        if (typeof dataCache["relaySpreadMsg" + msg.spId] === "undefined") return;
+        var obj = dataCache["relaySpreadMsg" + msg.spId];
+        if (msg.status === "error") {
+            //TODO: No clients available for relay spread
+            return;
+        }
+        spreadRelayMsg(obj, msg.ids);
+    };
 }
 
 var hasRelayConn = false;
@@ -343,8 +345,12 @@ function makeRelayConn(callback) {
 }
 function relayConnFail() {
     relay = null;
-    makeRelayConn(relayReconnected);
-    hasRelayConn = false;
+    if (hasRelayConn) {
+        makeRelayConn(relayReconnected);
+        hasRelayConn = false;
+    } else {
+        popupWindow("Connection failed!", "Connection to relay failed, please try again (later).", true, false);
+    }
     //TODO: React to possible situations
 }
 function relayReconnected() {
@@ -380,6 +386,7 @@ function cbStartup(data, pw)
 {
     try {
         dataCache['decoded'] = CryptoJS.AES.decrypt(data, pw).toString(CryptoJS.enc.Utf8);
+        dataCache['userPw'] = pw;
     } catch(ex) {
         console.error("Data could not be decoded!");
         popupWindow("Data decoding failed!", "Please try again or contact an administrator.", true, false);

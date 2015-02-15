@@ -18,15 +18,7 @@
             function setupRelay() {
                 var otherrelay = new RTCConnection();
                 otherrelay.init("relay", -1, function() {
-                    localforage.keys(function(err, keys) {
-                        $.each(keys, function() {
-                            var key = this;
-                            if (key.substr(0,4) === "user" && (key.substr(134) === "stores" || key.substr(134) === "hash" || key.substr(134) === "relaytime")) {
-                                localforage.removeItem(key);
-                            }
-                        });
-                        otherrelay.sendObj({"action": "relaydata"});
-                    });
+                    otherrelay.sendObj({"action": "relaydata"});
                 }, function() {}, [wsId]);
             }
             function pcMessage(peerconn, dc, data)
@@ -40,6 +32,7 @@
                             var answer = new Object();
                             answer.action = "getUserInfo";
                             answer.status = "notKnown";
+                            if (typeof data.cbId !== "undefined") answer.cbId = data.cbId;
                             dc.send(JSON.stringify(answer));
                         }
                         else
@@ -50,6 +43,7 @@
                                     var answer = new Object();
                                     answer.action = "getUserInfo";
                                     answer.status = "requestOther";
+                                    if (typeof data.cbId !== "undefined") answer.cbId = data.cbId;
                                     dc.send(JSON.stringify(answer));
                                 }
                                 else
@@ -59,11 +53,17 @@
                                     answer.status = "ok";
                                     answer.stores = stores;
                                     answer.hash = hash;
+                                    if (typeof data.cbId !== "undefined") answer.cbId = data.cbId;
                                     dc.send(JSON.stringify(answer));
                                 }
                             });
                         }
                     });
+                }
+                else if (data.action === "test") { //Spread test action
+                    console.log("test received!");
+                    console.log(data.spread);
+                    spreadRelayMsg(data, data.spread);
                 }
                 else if (data.action === "register")
                 {
@@ -72,14 +72,16 @@
                     var dataHash = data.hash;
                     localforage.setItem("user_" + userHash + "_stores", storagers);
                     localforage.setItem("user_" + userHash + "_hash", dataHash);
-                    var ts = Math.round(new Date().getTime() / 1000);
+                    var ts = "timestamp" in data ? data.timestamp : Math.round(new Date().getTime() / 1000);
                     localforage.setItem("user_" + userHash + "_relaytime", ts);
-                    //TODO: Distribute the data over the network
+                    data.timestamp = ts;
+                    spreadRelayMsg(data, data.spread);
                 }
                 else if (data.action === "addStore")
                 {
                     var userHash = data.user;
                     var storager = data.storager;
+                    var ts = "timestamp" in data ? data.timestamp : Math.round(new Date().getTime() / 1000);
                     localforage.getItem("user_" + userHash + "_stores").then(function (data) {
                         var stores = new Array();
                         if (data)
@@ -88,15 +90,18 @@
                         }
                         stores.push(storager);
                         localforage.setItem("user_" + userHash + "_stores", stores);
-                        var ts = Math.round(new Date().getTime() / 1000);
                         localforage.setItem("user_" + userHash + "_relaytime", ts);
                     });
+                    data.timestamp = ts;
+                    spreadRelayMsg(data, data.spread);
                 } else if (data.action === "updateHash") {
                     var userHash = data.user;
                     var dataHash = data.hash;
                     localforage.setItem("user_" + userHash + "_hash", dataHash);
                     var ts = Math.round(new Date().getTime() / 1000);
                     localforage.setItem("user_" + userHash + "_relaytime", ts);
+                    data.timestamp = ts;
+                    spreadRelayMsg(data, data.spread);
                 } else if (data.action === "stores") {
                     var count = data.userlist.length;
                     var found = 0;
@@ -153,10 +158,18 @@
                         peerconn.sendObj({"action": "currentrelaydata", "users": users});
                     });
                 } else if (data.action === "currentrelaydata") {
-                    $.each(data.users, function(key, value) {
-                        localforage.setItem("user_" + key + "_stores", value["stores"]);
-                        localforage.setItem("user_" + key + "_hash", value["hash"]);
-                        localforage.setItem("user_" + key + "_relaytime", value["relaytime"]);
+                    localforage.keys(function(err, keys) {
+                        $.each(keys, function() {
+                            var key = this + "";
+                            if (key.substr(0,4) === "user" && (key.substr(134) === "stores" || key.substr(134) === "hash" || key.substr(134) === "relaytime")) {
+                                localforage.removeItem(key);
+                            }
+                        });
+                        $.each(data.users, function(key, value) {
+                            localforage.setItem("user_" + key + "_stores", value["stores"]);
+                            localforage.setItem("user_" + key + "_hash", value["hash"]);
+                            localforage.setItem("user_" + key + "_relaytime", value["relaytime"]);
+                        });
                     });
                 }
             }

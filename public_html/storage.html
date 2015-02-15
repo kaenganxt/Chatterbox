@@ -17,6 +17,8 @@
         <script type="text/javascript" src="scripts/storagers.js"></script>
         <script type="text/javascript">
             var relay;
+            var spreadCount = 0;
+            var spreadData = new Array();
             localforage.getItem("storage_id").then(function(token) {
                 if (!token)
                 {
@@ -199,8 +201,35 @@
                 } else if (data.action === "havenewclient") {
                     localforage.setItem("user_" + data.user + "_data", data.data);
                     localforage.setItem("user_" + data.user + "_timestamp", data.timestamp);
-                    relay.sendObj({"action": "addStore", "user": data.user, "storager": wsToken});
+                    spreadCount++;
+                    send({"action": "getlist", "type": "relay", "spId": spreadCount});
+                    spreadData[spreadCount] = {"action": "addStore", "user": data.user, "storager": wsToken};
+                    wsHandlers["addstorelist"] = function(msg) {
+                        msg = JSON.parse(msg);
+                        if (typeof msg.spId === "undefined" || msg.spId === 0) return;
+                        if (typeof spreadData[msg.spId] === "undefined") return;
+                        var obj = spreadData[msg.spId];
+                        if (msg.status === "error") {
+                            //TODO: No clients available for relay spread
+                            return;
+                        }
+                        spreadRelayMsg(obj, msg.ids);
+                    };
                     relay.sendObj({"action": "usercount", "type": 2});
+                } else if (data.action === "updateuser") {
+                    var usr = data.user;
+                    localforage.getItem("user_" + usr + "_data").then(function (userdata) {
+                        var obj = new Object();
+                        obj.action = "login";
+                        if (!userdata) {
+                            return;
+                        }
+                        if (userdata.pwHash !== data.pwHash) {
+                            return;
+                        }
+                        userdata.enc = data.data;
+                        localforage.setItem("user_" + usr + "_data", userdata);
+                    });
                 }
             }
         </script>
