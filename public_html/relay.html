@@ -98,7 +98,7 @@
                     var userHash = data.user;
                     var dataHash = data.hash;
                     localforage.setItem("user_" + userHash + "_hash", dataHash);
-                    var ts = Math.round(new Date().getTime() / 1000);
+                    var ts = "timestamp" in data ? data.timestamp : Math.round(new Date().getTime() / 1000);
                     localforage.setItem("user_" + userHash + "_relaytime", ts);
                     data.timestamp = ts;
                     spreadRelayMsg(data, data.spread);

@@ -118,6 +118,7 @@ class socket(tornado.websocket.WebSocketHandler):
                         returnInfo = storagerByStr[msg["id"]]
                 else:
                     for conn in conns:
+                        conn = conns[conn]
                         if conn["type"] != msg["type"]:
                             continue
                         if conn["id"] != msg["id"]:
@@ -162,13 +163,16 @@ class socket(tornado.websocket.WebSocketHandler):
                     else:
                         list.append(client["id"])
                     count += 1
-                    if count == msg["count"]:
+                    if "count" in msg and count == msg["count"]:
                         break
             
             status = "ok"
             if count == 0:
                 status = "error"
-            self.write_message(json.dumps({"action": "getlist", "status": status, "ids": list}))
+            spId = 0
+            if "spId" in msg:
+                spId = msg["spId"]
+            self.write_message(json.dumps({"action": "getlist", "status": status, "ids": list, "spId": spId}))
         if msg["action"] == "status":
             for client in conns:
                 client = conns[client]
@@ -188,6 +192,7 @@ class socket(tornado.websocket.WebSocketHandler):
     
     def on_close(self):
         obj = conns[self.id]
+        del conns[self.id]
         for sid in obj["sids"]:
             sid = obj["sids"][sid]
             if sid["status"] == "busy":
@@ -201,9 +206,8 @@ class socket(tornado.websocket.WebSocketHandler):
                 continue
             del conns[sid["conn"]["id"]]["sids"][sid["conn"]["sid"]]
             
-        if conns[self.id]["type"] == "storager":
-            del storagerByStr[conns[self.id]["token"]]
-        del conns[self.id]
+        if obj["type"] == "storager":
+            del storagerByStr[obj["token"]]
      
     def check_origin(self, origin):
         return True
