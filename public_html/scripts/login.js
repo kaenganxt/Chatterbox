@@ -1,3 +1,5 @@
+/* global CryptoJS, hasWebSocket, storagers, localforage, storagerConns, wsHost, RTCConnection */
+
 var host = wsHost;
 var dataCache = new Array();
 var loginWaitingFor = "";
@@ -44,7 +46,8 @@ function loginFormHandlers(showWhat)
         }
         var newData = new Object();
         newData.usrName = CryptoJS.SHA3(data.usrName) + "";
-        newData.pw = CryptoJS.SHA3(data.usrPw) + "";
+        newData.pw = newHash(data.usrPw);
+        dataCache["hashedPw"] = newData.pw.hash;
         newData.encoded = "" + CryptoJS.AES.encrypt(JSON.stringify(data), data.usrPw);
         newData.action = "register";
         var register = new Object();
@@ -209,6 +212,7 @@ function loginHandler(data)
         else if (dataCache['login'].hash === CryptoJS.SHA3(dataO.data) + "")
         {
             popupWindow("Login successful!", "Starting chatterbox...");
+            dataCache["hash"] = dataCache["login"].hash;
             cbStartup(dataO.data, dataCache['loginPw']);
         }
         else
@@ -251,6 +255,7 @@ function wsHandler(msg) {
                     } else {
                         popupWindow("Registration complete!", "Starting chatterbox...");
                         localforage.setItem("lastStatus", "firstStartup");
+                        dataCache["hash"] = CryptoJS.SHA3(dataCache["register"].encoded);
                         cbStartup(dataCache['register'].encoded, dataCache['registerPw']);
                     }
                     loginWaitingFor = "";
@@ -269,15 +274,26 @@ function wsHandler(msg) {
         }
     }
 }
-function loginHasStore()
-{
-    var login = new Object();
-    login.action = "login";
-    login.username = dataCache['login'].username;
-    login.pwHash = CryptoJS.SHA3(dataCache['loginPw']) + "";
+function getSalt(pc, user, callback) {
+    pc.sendObj({"action": "getsalt", "user": user});
+    pc.registerListener("getsalt", function(answer) {
+        answer = JSON.parse(answer);
+        if (answer.action === "getsalt") {
+            callback(answer.salt);
+        }
+    });
+}
+function loginHasStore() {
     var peerconn = storagers["personal"].getPeerConn();
-    peerconn.sendObj(login);
-    peerconn.registerListener("loginHandler", loginHandler);
+    getSalt(peerconn, dataCache["login"].username, function(salt) {
+        var login = new Object();
+        login.action = "login";
+        login.username = dataCache['login'].username;
+        login.pwHash = generateHash(dataCache["loginPw"], salt);
+        dataCache["hashedPw"] = login.pwHash;
+        peerconn.sendObj(login);
+        peerconn.registerListener("loginHandler", loginHandler);
+    });
 }
 var registeredToRelay = false;
 function registerToRelay(id)
@@ -385,7 +401,7 @@ function popupWindow(header, text, closeButton, loadingWheel) {
 function cbStartup(data, pw)
 {
     try {
-        dataCache['decoded'] = CryptoJS.AES.decrypt(data, pw).toString(CryptoJS.enc.Utf8);
+        dataCache['decoded'] = JSON.parse(CryptoJS.AES.decrypt(data, pw).toString(CryptoJS.enc.Utf8));
         dataCache['userPw'] = pw;
     } catch(ex) {
         console.error("Data could not be decoded!");

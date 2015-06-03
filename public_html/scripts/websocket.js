@@ -1,3 +1,5 @@
+/* global canConnect, wsHost, wsPort, handler */
+
 var ws;
 var wsHandlers = new Object();
 var wsToken;
@@ -24,12 +26,17 @@ function wsConnDone() {
 function initWS(callback)
 {
     if (typeof canConnect !== "undefined" && canConnect === false) {
-        setTimeout(function() { initWS(callback); }, 10);
+        setTimeout(function() {
+            initWS(callback);
+        }, 10);
         return;
     }
     if (connecting) {
         if (typeof callback === "function") {
-            wsCallback = function() {wsCallback(); callback();};
+            wsCallback = function() {
+                wsCallback();
+                callback();
+            };
         }
         return;
     }
@@ -41,9 +48,9 @@ function initWS(callback)
     }
     connecting = true;
     var token = wsToken;
-    var tokenStr = (typeof token === "undefined" || token === null) ? "" : "&token="+token;
-    ws = new WebSocket("ws://" + wsHost + ":" + wsPort + "/socket?type="+handler["type"] + tokenStr);
-    ws.onopen = function () {
+    var tokenStr = (typeof token === "undefined" || token === null) ? "" : "&token=" + token;
+    ws = new WebSocket("ws://" + wsHost + ":" + wsPort + "/socket?type=" + handler["type"] + tokenStr);
+    ws.onopen = function() {
         if (handler["type"] !== "storager") {
             ws.send(JSON.stringify({"action": "userid"}));
             return;
@@ -51,7 +58,7 @@ function initWS(callback)
         wsId = -1;
         wsConnDone();
     };
-    ws.onmessage = function (evt) {
+    ws.onmessage = function(evt) {
         try {
             var data = JSON.parse(evt.data);
             if (data.action === "userid") {
@@ -59,15 +66,18 @@ function initWS(callback)
                 wsConnDone();
                 return;
             }
-        } catch (e) {}
-        $.each(wsHandlers, function () {
+        } catch (e) {
+        }
+        $.each(wsHandlers, function() {
             this(evt.data);
         });
     };
-    ws.onclose = function () {
+    ws.onclose = function() {
         connecting = false;
         hasWebSocket = false;
-        setTimeout(function() {initWS(wsCallback);}, 1000);
+        setTimeout(function() {
+            initWS(wsCallback);
+        }, 1000);
     };
 }
 function send(msg)

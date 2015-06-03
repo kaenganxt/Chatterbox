@@ -1,3 +1,5 @@
+/* global stunConfig, hasWebSocket, registerChatConn */
+
 var PeerConnection = window.RTCPeerConnection || window.mozRTCPeerConnection || window.webkitRTCPeerConnection;
 var SessionDescription = window.RTCSessionDescription || window.mozRTCSessionDescription || window.webkitRTCSessionDescription;
 var IceCandidate = window.RTCIceCandidate || window.mozRTCIceCandidate || window.webkitRTCIceCandidate;
@@ -7,6 +9,7 @@ conns["client"] = new Object();
 conns["relay"] = new Object();
 conns["storager"] = new Object();
 var sidConns = new Object();
+var dataLog = new Array();
 function RTCConnection(connectId) {
     var pc;
     var dcs = new Array();
@@ -65,7 +68,7 @@ function RTCConnection(connectId) {
                 console.error("Random connections are only possible for relays!");
                 return;
             }
-            id = -1;
+            lid = -1;
         }
         if (typeof callback !== "function") {
             console.warn("RTCConnection constructed without specifying a callback. This is not recommended as you can't get sure the connection is already complete!");
@@ -200,6 +203,7 @@ function RTCConnection(connectId) {
         dcCount = 0;
         hasConn = false;
         connecting = false;
+        delete conns[type][id];
     };
     this.close = function() {
         if (!hasConn) return;
@@ -233,7 +237,14 @@ function RTCConnection(connectId) {
                         return;
                 }
             }
+            dataLog.push({type: "in", data: ev.data});
             if (window.handler["hasListeners"]) {
+                var data = JSON.parse(ev.data);
+                if (data.action === "chatinit") {
+                    if (typeof registerChatConn === "function") {
+                        registerChatConn(rtc, data.me);
+                    }
+                }
                 $.each(listeners, function() {
                     this(ev.data);
                 });
@@ -259,6 +270,7 @@ function RTCConnection(connectId) {
         if (typeof dcId === "undefined" || dcId === null) {
             dcId = 0;
         }
+        dataLog.push({type: "out", data: msg});
         dcs[dcId].send(msg);
     };
     this.sendObj = function(obj, dcId) {

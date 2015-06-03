@@ -8,6 +8,7 @@
         <script type="text/javascript" src="libs/localForage.js"></script>
         <script type="text/javascript" src="config.js"></script>
         <script type="text/javascript">
+            /* global lfConfig, localforage, wsId */
             var handler = {"hasListeners": false, "type": "relay"};
             localforage.config(lfConfig);
         </script>
@@ -17,15 +18,32 @@
             initWS(setupRelay);
             function setupRelay() {
                 var otherrelay = new RTCConnection();
+                log("Start init...");
                 otherrelay.init("relay", -1, function() {
+                    log("Connection to other relay built, requesting updates...");
                     otherrelay.sendObj({"action": "relaydata"});
                 }, function() {}, [wsId]);
+            }
+            function parseKey(key) {
+                if (key.substr(0,4) !== "user") {
+                    return {valid: false};
+                }
+                var obj = {};
+                obj.valid = true;
+                obj.user = key.substr(5, 128);
+                obj.type = key.substr(134);
+                obj.long = key;
+                return obj;
+            }
+            function log(text) {
+                $("#log").prepend("<br />" + text);
             }
             function pcMessage(peerconn, dc, data)
             {
                 if (data.action === "userLoc")
                 {
                     var user = data.username;
+                    log("Answered userinfo request for " + user);
                     localforage.getItem("user_" + user + "_stores").then(function (stores) {
                         if (!stores)
                         {
@@ -68,6 +86,7 @@
                 else if (data.action === "register")
                 {
                     var userHash = data.user;
+                    log("Saving new user " + userHash);
                     var storagers = data.storagers;
                     var dataHash = data.hash;
                     localforage.setItem("user_" + userHash + "_stores", storagers);
@@ -80,6 +99,7 @@
                 else if (data.action === "addStore")
                 {
                     var userHash = data.user;
+                    log("Add store for user " + userHash);
                     var storager = data.storager;
                     var ts = "timestamp" in data ? data.timestamp : Math.round(new Date().getTime() / 1000);
                     localforage.getItem("user_" + userHash + "_stores").then(function (data) {
@@ -96,6 +116,7 @@
                     spreadRelayMsg(data, data.spread);
                 } else if (data.action === "updateHash") {
                     var userHash = data.user;
+                    log("Update hash for user " + userHash);
                     var dataHash = data.hash;
                     localforage.setItem("user_" + userHash + "_hash", dataHash);
                     var ts = "timestamp" in data ? data.timestamp : Math.round(new Date().getTime() / 1000);
@@ -104,6 +125,7 @@
                     spreadRelayMsg(data, data.spread);
                 } else if (data.action === "stores") {
                     var count = data.userlist.length;
+                    log("Returning storagers for " + count + " users");
                     var found = 0;
                     var answer = new Object();
                     $.each(data.userlist, function() {
@@ -122,24 +144,26 @@
                     localforage.keys(function(err, keys) {
                         var count = 0;
                         $.each(keys, function() {
-                            if (this.substr(0,4) === "user" && this.substr(134) === "stores") {
+                            var key = parseKey(this + "");
+                            if (key.valid && key.type === "stores") {
                                 count++;
                             }
                         });
+                        log("We have currently " + count + " registered users");
                         peerconn.sendObj({"action": "usercount", "count": count, "type": data.type});
                     });
                 } else if (data.action === "newclient") {
                     localforage.keys(function(err, keys) {
                         var foundOne = false;
                         $.each(keys, function() {
-                            var key = this;
-                            if (key.substr(0,4) === "user" && key.substr(134) === "stores") {
-                                localforage.getItem(key + "").then(function(stores) {
+                            var key = parseKey(this + "");
+                            if (key.valid && key.type === "stores") {
+                                localforage.getItem(key.long).then(function(stores) {
                                     if (foundOne) return;
                                     if ($.inArray(data.me, stores) !== -1) return;
                                     if (stores.length >= 20) return;
                                     foundOne = true;
-                                    peerconn.sendObj({"action": "newclient", "user": key.substr(5, 128), "stores": stores});
+                                    peerconn.sendObj({"action": "newclient", "user": key.user, "stores": stores});
                                 });
                             }
                         });
@@ -147,29 +171,71 @@
                 } else if (data.action === "relaydata") {
                     var users = new Object();
                     localforage.iterate(function(value, key) {
-                        if (key.substr(0,4) === "user" && (key.substr(134) === "stores" || key.substr(134) === "hash" || key.substr(134) === "relaytime")) {
-                            var user = key.substr(5, 128);
+                        key = parseKey(key);
+                        if (key.valid && (key.type === "stores" || key.type === "hash" || key.type === "relaytime")) {
+                            var user = key.user;
                             if (typeof users[user] === "undefined") {
                                 users[user] = new Object();
                             }
-                            users[user][key.substr(134)] = value;
+                            users[user][key.type] = value;
                         }
                     }).then(function() {
                         peerconn.sendObj({"action": "currentrelaydata", "users": users});
                     });
                 } else if (data.action === "currentrelaydata") {
+                    log("Current data received, parsing...");
                     localforage.keys(function(err, keys) {
+                        var updated = new Array();
                         $.each(keys, function() {
-                            var key = this + "";
-                            if (key.substr(0,4) === "user" && (key.substr(134) === "stores" || key.substr(134) === "hash" || key.substr(134) === "relaytime")) {
-                                localforage.removeItem(key);
+                            var key = parseKey(this + "");
+                            if (key.valid && (key.type === "stores" || key.type === "hash" || key.type === "relaytime")) {
+                                var user = key.user;
+                                if (!(user in data.users) && !$.inArray(user, updated)) {
+                                    var prefix = "user_" + user + "_";
+                                    updated.push(user);
+                                    log("Updating other relay for user " + user);
+                                    localforage.getItem(prefix + "stores").then(function(stores) {
+                                        localforage.getItem(prefix + "hash").then(function(hash) {
+                                            localforage.getItem(prefix + "relaytime").then(function(time) {
+                                                peerconn.sendObj({
+                                                    "action": "register",
+                                                    "storagers": stores,
+                                                    "hash": hash,
+                                                    "timestamp": time,
+                                                    "spread": []
+                                                });
+                                            });
+                                        });
+                                    });
+                                }
                             }
                         });
                         $.each(data.users, function(key, value) {
+                            localforage.getItem("user_" + key + "_relaytime").then(function(time) {
+                                if (time !== null) {
+                                    if (time > value["relaytime"]) {
+                                        log("We have a newer version of user " + key + ", updating the other relay...");
+                                        var prefix = "user_" + key + "_";
+                                        localforage.getItem(prefix + "stores").then(function(stores) {
+                                            localforage.getItem(prefix + "hash").then(function(hash) {
+                                                peerconn.sendObj({
+                                                    "action": "register",
+                                                    "storagers": stores,
+                                                    "hash": hash,
+                                                    "timestamp": time,
+                                                    "spread": []
+                                                });
+                                            });
+                                        });
+                                    }
+                                }
+                            });
                             localforage.setItem("user_" + key + "_stores", value["stores"]);
                             localforage.setItem("user_" + key + "_hash", value["hash"]);
                             localforage.setItem("user_" + key + "_relaytime", value["relaytime"]);
+                            log("New user while we were offline: " + key);
                         });
+                        log("All local data is up to date!");
                     });
                 }
             }
@@ -177,5 +243,9 @@
     </head>
     <body>
         <h1>Keep this site open</h1>
+        <div>Log:</div>
+        <div id="log">
+
+        </div>
     </body>
 </html>

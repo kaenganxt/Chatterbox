@@ -1,34 +1,49 @@
-function mainStart()
-{
+/* global localforage, dataCache, CryptoJS, relay */
 
+function mainStart() {
+    loadScript("postload/main.html", function(html) {
+        $("main").append(html);
+        $("title").html("Chatterbox");
+        $("<link/>", {rel: "stylesheet", type: "text/css", href: "style/jq.css"}).appendTo("head");
+        console.log($(document).height());
+        console.log($(document).width());
+        if ($(document).height() < 600 || $(document).width() < 800) {
+            $("<link/>", {rel: "stylesheet", type: "text/css", href: "style/mobile.css"}).appendTo("head");
+        }
+        console.log('ontouchstart' in window);
+        if ('ontouchstart' in window || 'onmsgesturechange' in window) {
+            loadScript("libs/jq.touch-punch.js", function() {
+                loadScript("scripts/system.js");
+            });
+        } else {
+            loadScript("scripts/system.js");
+        }
+    }, false);
 }
-function mainSetup(status)
-{
+function mainSetup(status) {
+    $("title").html("Chatterbox configuration");
     if (status === "firstStartup") {
-        $("<div class='screen' id='setupScreen'><h2>Welcome to the chatterbox network</h2>\
-           <h3>Here you can configure your chatterbox experience and set your information.</h3>\
-           <div class='screenInfoBox' id='setupInfoBox1'>It may take some time until your registration data<br />\
-           has spread through the network. Because of that, it is recomended that you configure<br />\
-           your settings like you want it to be. After that, the whole network should have got<br />\
-           your data and you can start using chatterbox.<div class='screenButtonSet' data-for='setupInfoBox1'>\
-           <input type='button' value='Continue' class='screenButtonContinue' />&nbsp;&nbsp;&nbsp;\
-           <input type='button' value='Skip' id='setupButtonSkip' /></div></div>\
-           </div>").appendTo("#mainElement");
-        $("title").html("Chatterbox configuration");
+        setupPage = 0;
+        $("#setupScreen").show();
     } else {
+        localforage.getItem("setupPosition").then(function(pos) {
+            if (!pos) {
+                mainSetup("firstStartup");
+                return;
+            }
+            $(".screen[data-id="+pos+"]").show();
+        });
     }
 }
 
-function setPersonalData(data) {
-    if (typeof data !== "Object") {
-        console.warn("Type of data has to be Object!");
-        return;
-    }
-    var enc = CryptoJS.AES.encrypt(JSON.stringify(data), dataCache['userPw']) + "";
+function setPersonalData() {
+    var enc = CryptoJS.AES.encrypt(JSON.stringify(dataCache["decoded"]), dataCache['userPw']) + "";
+    var hash = CryptoJS.SHA3(enc) + "";
+    if (dataCache["hash"] === hash) return;
     relay.sendObj({"action": "userLoc", "username": dataCache['user'], "cbId": "setPersonalData"});
     relay.registerListener("setPersonalData", function(msg) {
         var info = JSON.parse(msg);
-        if (info.cbId === "setPersonalData") {
+        if (info.action === "getUserInfo" && info.cbId === "setPersonalData") {
             if (info.status !== "ok") {
                 console.error("Relay does not know who we are?");
                 //TODO: Error handling
@@ -38,7 +53,15 @@ function setPersonalData(data) {
             var callback = {
                 haveOne: function(rtcConn) {
                     count++;
-                    rtcConn.sendObj({"action": "updateuser", "user": dataCache['user'], "pwHash": CryptoJS.SHA3(dataCache['userPw']) + "", "data": enc});
+                    if (typeof dataCache["hashedPw"] === "undefined") {
+                        getSalt(rtcConn, dataCache["user"], function(salt) {
+                            var pw = generateHash(dataCache["userPw"], salt);
+                            rtcConn.sendObj({"action": "updateuser", "user": dataCache['user'], "pwHash": pw, "data": enc});
+                            dataCache["hashedPw"] = pw;
+                        });
+                    } else {
+                        rtcConn.sendObj({"action": "updateuser", "user": dataCache['user'], "pwHash": dataCache["hashedPw"], "data": enc});
+                    }
                 },
                 done: function() {
                     if (count === 0) {
@@ -47,28 +70,56 @@ function setPersonalData(data) {
                         //TODO: Store data temporarily in local store if the user wants to
                         return;
                     }
-                    spreadRelay({"action": "updateHash", "user": dataCache['user'], "hash": CryptoJS.SHA3(enc) + ""});
+                    spreadRelay({"action": "updateHash", "user": dataCache['user'], "hash": hash});
+                    dataCache["hash"] = hash;
                 }
             };
-            new StoragerConnect("setPersonalData", info.stores, callback, true);
+            new StoragerConnect("setPersonalData", info.stores, callback, true).start();
         }
     });
 }
 
-localforage.getItem("lastStatus").then(function (status)
-{
-    $("<div id='mainElement'><!-- The main chatterbox network elements --></div>").appendTo("body");
-    $("#login, #loadingModal, #loadingOverlay").hide();
-    if (status === "firstStartup" || status === "configure" || status === "no")
-    {
-        if (status === "no") {
-            status = "firstStartup";
+var setupPage;
+function setupHandlers() {
+    $(".screenButtonContinue").click(function() {
+        $(".screen[data-id="+setupPage+"]").hide();
+        setupPage++;
+        $(".screen[data-id="+setupPage+"]").show();
+        if (setupPage === 1) {
+            localforage.setItem("lastStatus", "configure");
         }
-        mainSetup(status);
-    }
-    else
-    {
+        localforage.setItem("setupPosition", setupPage);
+    });
+    $("#setupButtonSkip, #setupButtonFinish").click(function() {
+        localforage.setItem("lastStatus", "setupDone");
+        dataCache["decoded"].setup = true;
+        setPersonalData();
+        $(".screen").hide();
         mainStart();
-    }
-    $("#connectingPopup").hide();
-});
+    });
+}
+$("#login, #loadingModal, #loadingOverlay, #connectingPopup").hide();
+if (typeof dataCache["decoded"].setup === "undefined") {
+    localforage.getItem("lastStatus").then(function (status)
+    {
+        if (status === "firstStartup" || status === "configure" || status === "no")
+        {
+            if (status === "no") {
+                status = "firstStartup";
+            }
+            loadScript("postload/setupPages.html", function(html) {
+                $("main").append(html);
+                setupHandlers();
+                mainSetup(status);
+            }, false);
+        }
+        else
+        {
+            dataCache["decoded"].setup = true;
+            setPersonalData();
+            mainStart();
+        }
+    });
+} else {
+    mainStart();
+}

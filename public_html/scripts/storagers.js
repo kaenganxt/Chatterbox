@@ -1,3 +1,5 @@
+/* global ws, localforage */
+
 var storagerConnects = 0;
 var storagers = new Object();
 var storageBlacklist = new Array();
@@ -49,7 +51,7 @@ function StoragerConnect(name, ids, callback, makeAllArg) {
             }
             if (this in storagerConns) {
                 if (makeAll) {
-                    callback.haveOne(this);
+                    callback.haveOne(storagerConns[this]);
                     checked++;
                     if (checked === ids.length) {
                         callback.done();

@@ -1,3 +1,5 @@
+/* global localforage */
+
 console.log("Using " + localforage.driver());
 localforage.getItem("lastseen").then(function (lastseen) {
     if (!lastseen)

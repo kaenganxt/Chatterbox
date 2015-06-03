@@ -9,20 +9,23 @@
         <script type="text/javascript" src="libs/localForage.js"></script>
         <script type="text/javascript" src="config.js"></script>
         <script type="text/javascript">
+            /* global localforage, lfConfig, storagerConns */
             var handler = {"hasListeners": false, "type": "storager"};
             localforage.config(lfConfig);
         </script>
         <script type="text/javascript" src="scripts/websocket.js"></script>
         <script type="text/javascript" src="scripts/rtcConns.js"></script>
         <script type="text/javascript" src="scripts/storagers.js"></script>
+        <script type="text/javascript" src="scripts/security.js"></script>
         <script type="text/javascript">
             var relay;
             var spreadCount = 0;
             var spreadData = new Array();
             localforage.getItem("storage_id").then(function(token) {
-                if (!token)
-                {
-                    var token = generateStr();
+                if (!token) {
+                    log("Generating new token...");
+                    var token = generateRandString();
+                    log("Our token is " + token);
                     localforage.setItem("storage_id", token);
                 }
                 wsToken = token;
@@ -30,19 +33,36 @@
             });
             function storagerUpdateRequest(peerConn, user) {
                 peerConn.sendObj({"action": "lastUpdate", "user": user});
-            };
+            }
+            function parseKey(key) {
+                if (key.substr(0,4) !== "user") {
+                    return {valid: false};
+                }
+                var obj = {};
+                obj.valid = true;
+                obj.user = key.substr(5, 128);
+                obj.type = key.substr(134);
+                obj.long = key;
+                return obj;
+            }
+            function log(text) {
+                $("#log").prepend("<br />" + text);
+            }
             function storagerStartup() {
+                log("Start init...");
                 relay = new RTCConnection();
                 relay.init("relay", -1, function() {
                     localforage.keys(function(err, keys) {
                         var users = new Array();
                         $.each(keys, function() {
-                            if (this.substr(0,4) === "user" && this.substr(134) === "data") {
-                                var userHash = this.substr(5, 128);
+                            var key = parseKey(this + "");
+                            if (key.valid && key.type === "data") {
+                                var userHash = key.user;
                                 users.push(userHash);
                             }
                         });
                         relay.sendObj({"action": "stores", "userlist": users});
+                        log("Refreshing userdata");
                     });
                     relay.sendObj({"action": "usercount", "type": 1});
                 }, relayConnFail);
@@ -51,62 +71,56 @@
                 relay.clearVars();
                 storagerStartup();
             }
-            function generateStr() {
-                var chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890!*/-|";
-                var string = "";
-                for (var i = 0; i < 20; i++) {
-                    string += chars[Math.floor(Math.random()*chars.length)];
-                }
-                return string;
-            }
             canConnect = true;
-            wsHandlers["storager"] = function(data)
-            {
+            wsHandlers["storager"] = function(data) {
                 data = JSON.parse(data);
                 if (data.action === "close" && data.type === "invalidToken") {
                     canConnect = false;
                     localforage.removeItem("storage_id").then(function() { canConnect = true; });
                 }
             };
-            function pcMessage(peerconn, datachannel, data)
-            {
-                if (data.action === "login")
-                {
+            function pcMessage(peerconn, datachannel, data) {
+                if (data.action === "login") {
                     var usr = data.username;
                     var pw = data.pwHash;
+                    log("Answered login request for " + usr);
                     localforage.getItem("user_" + usr + "_data").then(function (userdata) {
                         var obj = new Object();
                         obj.action = "login";
-                        if (!userdata)
-                        {
+                        if (!userdata) {
                             obj.status = "notKnown";
-                        }
-                        else
-                        {
-                            if (userdata.pwHash !== pw)
-                            {
+                        } else {
+                            if (userdata.pwHash !== pw) {
                                 obj.status = "pwWrong";
-                            }
-                            else
-                            {
+                            } else {
                                 obj.status = "ok";
                                 obj.data = userdata.enc;
                             }
                         }
                         datachannel.send(JSON.stringify(obj));
                     });
-                }
-                else if (data.action === "register")
-                {
+                } else if (data.action === "register") {
                     var user = data.usrName;
                     var pw = data.pw;
                     var enc = data.encoded;
                     var obj = new Object();
-                    obj.pwHash = pw;
+                    obj.pwHash = pw.hash;
+                    obj.salt = pw.salt;
                     obj.enc = enc;
+                    log("Registered new user " + user);
                     localforage.setItem("user_" + user + "_data", obj);
                     var ts = Math.round(new Date().getTime() / 1000);
                     localforage.setItem("user_" + user + "_timestamp", ts);
+                } else if (data.action === "getsalt") {
+                    localforage.getItem("user_" + data.user + "_data").then(function(data) {
+                        if (!data) {
+                            peerconn.sendObj({"action": "getsalt", "status": "no_user"});
+                        } else {
+                            var salt = data.salt;
+                            peerconn.sendObj({"action": "getsalt", "status": "ok", "salt": salt});
+                        }
+                    });
+                    log("Answered salt request for " + data.user);
                 } else if (data.action === "lastUpdate") {
                     var userHash = data.user;
                     localforage.getItem("user_" + userHash + "_timestamp").then(function(timestamp) {
@@ -171,7 +185,8 @@
                     var ownCount = 0;
                     localforage.keys(function(err, keys) {
                         $.each(keys, function() {
-                            if (this.substr(0,4) === "user" && this.substr(134) === "data") {
+                            var key = parseKey(this + "");
+                            if (key.valid && key.type === "data") {
                                 ownCount++;
                             }
                         });
@@ -199,6 +214,7 @@
                         });
                     });
                 } else if (data.action === "havenewclient") {
+                    log("New user data " + data.user);
                     localforage.setItem("user_" + data.user + "_data", data.data);
                     localforage.setItem("user_" + data.user + "_timestamp", data.timestamp);
                     spreadCount++;
@@ -218,9 +234,8 @@
                     relay.sendObj({"action": "usercount", "type": 2});
                 } else if (data.action === "updateuser") {
                     var usr = data.user;
+                    log("Updated user " + usr);
                     localforage.getItem("user_" + usr + "_data").then(function (userdata) {
-                        var obj = new Object();
-                        obj.action = "login";
                         if (!userdata) {
                             return;
                         }
@@ -236,5 +251,9 @@
     </head>
     <body>
         <h1>Keep this site open</h1>
+        <div>Log:</div>
+        <div id="log">
+
+        </div>
     </body>
 </html>

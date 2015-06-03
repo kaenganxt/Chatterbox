@@ -7,6 +7,7 @@
         <script type="text/javascript" src="libs/jq.js"></script>
         <script type="text/javascript" src="config.js"></script>
         <script type="text/javascript">
+            /* global localforage, lfConfig */
             //Startup loading
             var handler = {"hasListeners": true, "type": "client"};
             $(document).ready(function () {
@@ -22,8 +23,10 @@
                                 localforage.config(lfConfig);
                                 $("#loadingModal>div>div").html("Loading Crypto-JS...");
                                 loadScript("libs/cryptoJs.js", function() {
-                                    $("#loadingModal>div>div").html("Loading storage setup...");
-                                    loadScript("scripts/storageSetup.js");
+                                    loadScript("scripts/security.js", function() {
+                                        $("#loadingModal>div>div").html("Loading storage setup...");
+                                        loadScript("scripts/storageSetup.js");
+                                    });
                                 });
                             });
                         });
