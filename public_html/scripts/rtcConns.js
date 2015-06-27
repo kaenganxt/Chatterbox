@@ -78,7 +78,7 @@ function RTCConnection(connectId) {
         beginner = true;
         type = ltype;
         id = lid;
-        afterConnect = callback;
+        afterConnect = function() { connAbort = function() {}; callback(); };
         if (typeof failCallback !== "function") {
             failCallback = function() {};
         }
@@ -242,7 +242,7 @@ function RTCConnection(connectId) {
                 var data = JSON.parse(ev.data);
                 if (data.action === "chatinit") {
                     if (typeof registerChatConn === "function") {
-                        registerChatConn(rtc, data.me);
+                        registerChatConn(rtc, {id: data.me, name: data.myName});
                     }
                 }
                 $.each(listeners, function() {

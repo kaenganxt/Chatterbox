@@ -78,6 +78,7 @@ function loginFormHandlers(showWhat)
         }
         dataCache['register'] = newData;
         dataCache['user'] = register.username;
+        dataCache['username'] = data.usrName;
     });
     $("#loginForm").bind("submit", function (e) {
         e.preventDefault();
@@ -119,6 +120,7 @@ function loginFormHandlers(showWhat)
         dataCache['loginPw'] = usrPw;
         dataCache['login'] = login;
         dataCache['user'] = login.username;
+        dataCache['username'] = usrName;
     });
 }
 function onUserInfo(info) {

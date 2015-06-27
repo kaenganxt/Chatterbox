@@ -1,16 +1,19 @@
-/* global localforage, dataCache, CryptoJS, relay */
+/* global localforage, dataCache, CryptoJS, relay, wsId */
 
 function mainStart() {
     loadScript("postload/main.html", function(html) {
         $("main").append(html);
         $("title").html("Chatterbox");
         $("<link/>", {rel: "stylesheet", type: "text/css", href: "style/jq.css"}).appendTo("head");
-        console.log($(document).height());
-        console.log($(document).width());
         if ($(document).height() < 600 || $(document).width() < 800) {
             $("<link/>", {rel: "stylesheet", type: "text/css", href: "style/mobile.css"}).appendTo("head");
         }
-        console.log('ontouchstart' in window);
+        //Check if user wants that:
+        var setLastOnline = function() {
+            spreadRelay({"action": "lastOnline", "user": dataCache["user"], "timestamp": Math.round(new Date().getTime() / 1000), "id": wsId});
+        };
+        setInterval(setLastOnline, 1000 * 60 * 2);
+        setLastOnline();
         if ('ontouchstart' in window || 'onmsgesturechange' in window) {
             loadScript("libs/jq.touch-punch.js", function() {
                 loadScript("scripts/system.js");
@@ -20,6 +23,7 @@ function mainStart() {
         }
     }, false);
 }
+
 function mainSetup(status) {
     $("title").html("Chatterbox configuration");
     if (status === "firstStartup") {

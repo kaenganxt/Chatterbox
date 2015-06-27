@@ -1,61 +1,87 @@
-/* global dataCache, getWindow, conns, dataLog, wsId, chats */
-var ownId;
-loadScript("scripts/windows.js", function() {
-    refreshFooter();
-    if (dataCache["decoded"].windows !== "undefined") {
-        $.each(dataCache["decoded"].windows, function(key, value) {
-            if (key.substr(0, 4) === "chat")
-                return;
-            var win = getWindow(key);
-            win.show();
-            win.setPosition(value.top, value.left);
-        });
-    }
-});
+/* global dataCache, getWindow, conns, dataLog, wsId, chats, relay, CryptoJS */
+loadScript("scripts/windows.js");
 setInterval(refreshFooter, 6000);
 $("#footerForkMe").click(function() {
     window.open("https://github.com/kaenganxt/Chatterbox");
 });
+
 $("#footerSentDataElement").click(function() {
     getWindow("dataOverview").show();
 });
 
-$("#chatOwnId").html(wsId);
+dataCache["resolvedUsers"] = new Object();
 $("#chatConnectForm").submit(function(e) {
     e.preventDefault();
-    var value = $("#chatField").val();
-    if (value === "")
-        return;
-    for (var i = 0; i < value.length; i++) {
-        if ((value.charAt(i) < '0') || (value.charAt(i) > '9')) {
-            alert("Please type a number!");
+    var val = $("#chatField").val();
+    if (val === "") return;
+    resolveUsername(val).then(function(id) {
+        if (id in chats) {
+            getWindow("chat" + id).show();
             return;
+        } else {
+            chatConnect(id, val).catch(function() {
+                alert("Could not connect to requested chat partner!");
+            });
         }
-    }
-    if (value in chats) {
-        getWindow("chat" + value).show();
-        return;
-    }
-    var conn;
-    if (value in conns["client"]) {
-        conn = conns["client"][value];
-        conn.sendObj({"action": "chatinit", "me": wsId});
-    } else {
-        conn = new RTCConnection();
-        conn.init("client", value, function() {
-            conn.sendObj({"action": "chatinit", "me": wsId});
-        }, function() {
-            alert("Could not connect to requested chat partner!");
-        });
-    }
-    conn.registerListener("chatConnect", function(msg) {
-        msg = JSON.parse(msg);
-        if (msg.action === "chatConnect") {
-            console.log("new chatwindow");
-            new chatWindow(value, conn);
-        }
+    }, function() {
+        alert("The requested chat partner is currently offline!");
     });
 });
+
+function resolveUsername(username) {
+    return new Promise(function(resolve, reject) {
+        var value = CryptoJS.SHA3(username) + "";
+        if (typeof dataCache["resolvedUsers"][value] !== "undefined") {
+            var id = dataCache["resolvedUsers"][value];
+            resolve(id);
+            return;
+        }
+        relay.sendObj({action: "isOnline", user: value, cbId: "chat"});
+        relay.registerListener("chatUserResolve", function (data) {
+            data = JSON.parse(data);
+            if (data.action === "isOnline" && data.cbId === "chat") {
+                if (data.status !== "online") {
+                    reject();
+                    return;
+                }
+                var lId = data.lastid;
+                dataCache["resolvedUsers"][data.user] = lId;
+                resolve(lId);
+            }
+        });
+    });
+}
+
+function chatConnect(id, user) {
+    return new Promise(function(resolve, reject) {
+        var conn;
+        if (id === -1) {
+            delete dataCache["resolvedUsers"][CryptoJS.SHA3(user) + ""];
+            resolveUsername(user).then(function(uId) {
+                chatConnect(uId, user).then(resolve, reject);
+            }, reject);
+            return;
+        } else if (id in conns["client"]) {
+            conn = conns["client"][id];
+            conn.sendObj({"action": "chatinit", "me": wsId, "myName": dataCache["username"]});
+        } else {
+            conn = new RTCConnection();
+            conn.init("client", id, function() {
+                conn.sendObj({"action": "chatinit", "me": wsId, "myName": dataCache["username"]});
+            }, function() {
+                reject();
+            });
+        }
+        conn.registerListener("chatConnect", function(msg) {
+            msg = JSON.parse(msg);
+            if (msg.action === "chatConnect") {
+                new chatWindow(id, conn, user);
+                resolve(id);
+            }
+        });
+    });
+}
+
 $("#chatterboxWindows").on("submit", ".chatInput>form", function(e) {
     e.preventDefault();
     var input = $(this).children("input");
@@ -63,16 +89,20 @@ $("#chatterboxWindows").on("submit", ".chatInput>form", function(e) {
         return;
     var id = $(this).attr("data-id");
     if (id in conns["client"]) {
-        conns["client"][id].sendObj({"action": "chatMessage", "id": wsId, "message": input.val()});
-        $(".chatWindow[data-chat='" + id + "']").append("<br /><span class='chatMsg chatMe'>" + input.val() + "</span>");
-        input.val("");
+        chats[id].send(input);
     } else {
-        alert("Connection not found?");
+        $(".chatWindow[data-chat='" + id + "']").append("<br />Reconnect...");
+        chatConnect(-1, chats[id].getUser()).then(function(newId) {
+            chats[id].delete();
+            chats[newId].send(input);
+        }, function() {
+            $(".chatWindow[data-chat='" + id + "']").append("<br />Failed!");
+        });
     }
 });
 function registerChatConn(conn, chatPartner) {
     conn.sendObj({"action": "chatConnect"});
-    new chatWindow(chatPartner, conn);
+    new chatWindow(chatPartner.id, conn, chatPartner.name);
 }
 
 function refreshFooter() {

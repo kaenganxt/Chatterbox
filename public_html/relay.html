@@ -237,6 +237,25 @@
                         });
                         log("All local data is up to date!");
                     });
+                } else if (data.action === "lastOnline") {
+                    log("Setting lastonline for " + data.user);
+                    localforage.setItem("user_" + data.user + "_lastonline", {time: data.timestamp, id: data.id});
+                } else if (data.action === "isOnline") {
+                    localforage.getItem("user_" + data.user + "_lastonline").then(function(lastonline) {
+                        var answer = new Object();
+                        answer.action = "isOnline";
+                        answer.user = data.user;
+                        if (typeof data.cbId !== "undefined") answer.cbId = data.cbId;
+                        if (!lastonline || (Math.round(new Date().getTime() / 1000) - lastonline.timestamp) > 60 * 6) {
+                            answer.status = "offline";
+                            dc.send(JSON.stringify(answer));
+                            return;
+                        }
+                        answer.status = "online";
+                        answer.lasttime = lastonline.timestamp;
+                        answer.lastid = lastonline.id;
+                        dc.send(JSON.stringify(answer));
+                    });
                 }
             }
         </script>
