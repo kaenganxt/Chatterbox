@@ -4,8 +4,7 @@ var host = wsHost;
 var dataCache = new Array();
 var loginWaitingFor = "";
 var relayBlacklist = new Array();
-function loginFormHandlers(showWhat)
-{
+function loginFormHandlers(showWhat) {
     $("#loadingModal").hide();
     $(".md-overlay").hide();
     $("#registerUsername, #registerEmail, #registerPassword, #registerPassword2").focus(function () {
@@ -80,6 +79,7 @@ function loginFormHandlers(showWhat)
         dataCache['user'] = register.username;
         dataCache['username'] = data.usrName;
     });
+
     $("#loginForm").bind("submit", function (e) {
         e.preventDefault();
         if (loginWaitingFor !== "") {
@@ -87,8 +87,7 @@ function loginFormHandlers(showWhat)
         }
         var usrName = $("#loginUsername").val();
         var usrPw = $("#loginPassword").val();
-        if (usrName === "" || usrPw === "")
-        {
+        if (usrName === "" || usrPw === "") {
             alert("You need a username and a password to log in!");
             return;
         }
@@ -101,17 +100,12 @@ function loginFormHandlers(showWhat)
             relay.sendObj(login);
             loginWaitingFor = "login";
         };
-        if (hasRelayConn)
-        {
+        if (hasRelayConn) {
             afterRelayConn();
-        }
-        else if (hasWebSocket)
-        {
+        } else if (hasWebSocket) {
             popupWindow("Login...", "Connecting to relay...");
             makeRelayConn(afterRelayConn);
-        }
-        else
-        {
+        } else {
             popupWindow("Login...", "Connecting to websocket...");
             initWS(function() {
                 makeRelayConn(afterRelayConn);
@@ -172,8 +166,13 @@ function onUserInfo(info) {
                     popupWindow("Login...", "Loading storager script...");
                     loadScript("scripts/storagers.js", stConnect);
                 } else if ("personal" in storagers) {
-                    popupWindow("Login...", "Getting login information...");
-                    loginHasStore();
+                    if (storagers["personal"].getState() === "done") {
+                        popupWindow("Login...", "Getting login information...");
+                        loginHasStore();
+                    } else {
+                        popupWindow("Login...", "Connecting to storager...");
+                        storagers["personal"].restart();
+                    }
                 } else {
                     stConnect();
                 }

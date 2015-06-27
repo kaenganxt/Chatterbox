@@ -1,4 +1,4 @@
-/* global ws, localforage */
+/* global ws, localforage, popupWindow */
 
 var storagerConnects = 0;
 var storagers = new Object();
@@ -21,14 +21,25 @@ function StoragerConnect(name, ids, callback, makeAllArg) {
     this.getPeerConn = function() {
         return peerConn;
     };
+    this.getState = function() {
+        return state;
+    };
     this.getId = function() {
         return workingId;
+    };
+    this.restart = function() {
+        state = "none";
+        workingId = undefined;
+        peerConn = undefined;
+        this.start();
     };
     this.start = function() {
         if (window.storageBlacklist.length === 0) {
             setTimeout(thiss.start, 10);
             return;
         }
+        if (state === "done") return;
+        checked = 0;
         $.each(ids, function() {
             if (state === "done") {
                 return;
@@ -41,11 +52,7 @@ function StoragerConnect(name, ids, callback, makeAllArg) {
             {
                 checked++;
                 if (checked === ids.length) {
-                    if (makeAll) {
-                        callback.done();
-                    } else {
-                        callback.notAvailable();
-                    }
+                    thiss.after();
                 }
                 return;
             }
@@ -116,24 +123,41 @@ function StoragerConnect(name, ids, callback, makeAllArg) {
                     }
                     checked++;
                     if (checked === ids.length) {
-                        if (makeAll) {
-                            callback.done();
-                            state = "done";
-                            return;
-                        }
-                        if (state === "checkingRegular") {
-                            setTimeout(thiss.start, 1500);
-                            return;
-                        }
-                        if (typeof callback.check !== "function" || callback.check()) {
-                            state = "checkingRegular";
-                            setTimeout(thiss.start, 1500);
-                        }
-                        callback.notAvailable();
+                        thiss.after();
                     }
                 }
             }
         };
+    };
+
+    this.after = function() {
+        if (makeAll) {
+            callback.done();
+            state = "done";
+            return;
+        }
+        if (state === "checkingRegular") {
+            thiss.retryLater();
+            return;
+        }
+        if (typeof callback.check !== "function" || callback.check()) {
+            state = "checkingRegular";
+            thiss.retryLater();
+            return;
+        }
+        callback.notAvailable();
+    };
+
+    this.retryLater = function() {
+        if (name === "personal" && typeof popupWindow === "function") {
+            popupWindow("Waiting", "Waiting for the next try to connect...");
+        }
+        setTimeout(function() {
+            if (name === "personal" && typeof popupWindow === "function") {
+                popupWindow("Retrying...", "Retrying storager connection...");
+            }
+            thiss.start();
+        }, 1500);
     };
 }
 
