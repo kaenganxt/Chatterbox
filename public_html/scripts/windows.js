@@ -5,10 +5,9 @@ var chats = new Object();
 
 loadScript("scripts/window.js", init);
 function init() {
-
     getWindow("dataOverview", 400, 400, "Transferred data packets", "<div id='dataPacketsList'></div>", {save: true});
     getWindow("clientOverview", 400, 400, "Connected clients", "<div id='clientList'></div>", {save: true});
-    if (dataCache["decoded"].windows !== "undefined") {
+    if (typeof dataCache["decoded"].windows !== "undefined") {
         $.each(dataCache["decoded"].windows, function(key, value) {
             if (key.substr(0, 4) === "chat") return;
             var win = getWindow(key);
@@ -32,7 +31,7 @@ function chatWindow(clientId, rtcConn, user) {
     rtcConn.registerListener("chat" + clientId, function(msg) {
         msg = JSON.parse(msg);
         if (msg.action === "chatMessage" && msg.id === client) {
-            $(".chatWindow[data-chat='" + client + "']").append("<br /><span class='chatMsg chatPartner'>" + msg.message + "</span>");
+            $(".chatWindow[data-chat='" + client + "']").append("<br style='line-height:25px' /><span class='chatMsg chatPartner'>" + msg.message + "</span>");
         }
     });
     getWindow("chat" + client).show();
@@ -48,7 +47,7 @@ function chatWindow(clientId, rtcConn, user) {
 
     this.send = function(input) {
         conns["client"][client].sendObj({"action": "chatMessage", "id": wsId, "message": input.val()});
-        $(".chatWindow[data-chat='" + client + "']").append("<br /><span class='chatMsg chatMe'>" + input.val() + "</span>");
+        $(".chatWindow[data-chat='" + client + "']").append("<br style='line-height:25px' /><span class='chatMsg chatMe'>" + input.val() + "</span>");
         input.val("");
     };
 }

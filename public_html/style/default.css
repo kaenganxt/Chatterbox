@@ -331,7 +331,6 @@ footer {
 .cbWindowBody {
     margin:0;
     padding:10px 0;
-    width:96%;
     overflow:auto;
 }
 .cbWindowHeaderIcons {
@@ -379,15 +378,21 @@ footer {
     width:5em;
     min-width:1.2em;
 }
+.chatWindow {
+    margin-top:-1em;
+    height:97%;
+    overflow:auto;
+}
 .chatInput {
     bottom:0;
     border-top: 1px solid black;
     position:absolute;
     padding-top:0.5em;
     width:100%;
+    background-color:gray;
 }
 .chatMe {
-    position:absolute;
+    float:right;
     right:0;
 }
 .chatMsg {
