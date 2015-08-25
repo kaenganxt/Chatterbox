@@ -363,15 +363,12 @@ function makeRelayConn(callback) {
 function relayConnFail() {
     relay = null;
     if (hasRelayConn) {
-        makeRelayConn(relayReconnected);
+        makeRelayConn(function() { console.log("Connection rebuilt!"); });
         hasRelayConn = false;
     } else {
         popupWindow("Connection failed!", "Connection to relay failed, please try again (later).", true, false);
     }
     //TODO: React to possible situations
-}
-function relayReconnected() {
-    console.log("Connection rebuilt!");
 }
 //TODO: Some disconnect mechanism
 
@@ -399,8 +396,7 @@ function popupWindow(header, text, closeButton, loadingWheel) {
     $("#connectingPopup").show();
 }
 
-function cbStartup(data, pw)
-{
+function cbStartup(data, pw) {
     try {
         dataCache['decoded'] = JSON.parse(CryptoJS.AES.decrypt(data, pw).toString(CryptoJS.enc.Utf8));
         dataCache['userPw'] = pw;
@@ -409,5 +405,5 @@ function cbStartup(data, pw)
         popupWindow("Data decoding failed!", "Please try again or contact an administrator.", true, false);
         return;
     }
-    loadScript("scripts/main.js");
+    loadScript("scripts/setup.js");
 }

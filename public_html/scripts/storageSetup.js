@@ -2,37 +2,29 @@
 
 console.log("Using " + localforage.driver());
 localforage.getItem("lastseen").then(function (lastseen) {
-    if (!lastseen)
-    {
+    if (!lastseen) {
         console.log("You are new, i think.");
         newUser();
         return;
     }
     localforage.getItem("lastStatus").then(function (laststatus) {
-        if (!laststatus)
-        {
+        if (!laststatus) {
             localforage.setItem("lastStatus", "no");
             login("new");
             laststatus = "no";
-        }
-        else if (laststatus === "no")
-        {
+        } else if (laststatus === "no") {
             login("new");
-        }
-        else
-        {
+        } else {
             login();
         }
     });
 });
-function newUser()
-{
+function newUser() {
     localforage.setItem("lastseen", new Date().getTime());
     localforage.setItem("lastStatus", "no");
     login("new");
 }
-function login(isNew)
-{
+function login(isNew) {
     var whatToShow = "login";
     if (isNew === "new")
         whatToShow = "register";

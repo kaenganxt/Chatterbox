@@ -38,10 +38,11 @@ The following works:
 - [X] Some error handling
 - [X] Username and Password hashing
 - [X] Personal data encryption
+- [X] Data distribution over the network
+- [X] Login error handling
 
 The following is to do:
 - [ ] The social network itself
 - [ ] A configuration manager
 - [ ] A nice user interface
-- [ ] Some better error handling
-- [ ] Data distribution over the network
+- [ ] Friend system
